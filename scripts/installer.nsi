@@ -4,7 +4,7 @@ Unicode true
 !include "FileFunc.nsh"
 
 !ifndef APPVERSION
-  !define APPVERSION "1.3.0"
+  !define APPVERSION "1.4.0"
 !endif
 !ifndef PROJECTROOT
   !define PROJECTROOT "."

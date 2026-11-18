@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Yardım & Kurulum — Arena Live OS</title>
+<meta name="description" content="Arena Live OS resimli kurulum rehberi: GitHub otomatik tarama, Windows kurulum paketi, panel kullanımı, sandık bildirimleri ve SSS." />
+<link rel="stylesheet" href="panel.css" />
+</head>
+<body data-page="yardim" data-crumb="Yardım">
+<div class="grid-lines"></div>
+<div class="overlay-backdrop" data-backdrop></div>
+<div class="shell">
+  <aside class="sidebar" data-sidebar></aside>
+  <div class="main">
+    <header class="topbar" data-topbar></header>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Platform · Destek</p>
+          <h1>Yardım & kurulum</h1>
+          <p class="lead">Panel, GitHub otomasyonu ve Windows paketi için resimli rehber. Her adım bu depodaki gerçek ekranlarla hazırlandı.</p>
+        </div>
+        <div class="head-actions">
+          <a class="btn primary" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows'u indir</a>
+          <a class="btn" href="https://github.com/CehennemGibiyim/ArenaSag#readme" target="_blank" rel="noreferrer">GitHub README ↗</a>
+        </div>
+      </div>
+
+      <div class="quick" style="margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <a class="btn" href="#panel">Panel kullanımı</a>
+        <a class="btn" href="#windows">Windows kurulumu</a>
+        <a class="btn" href="#otomasyon">Otomatik tarama</a>
+        <a class="btn" href="#tam-panel">Tam panel modülleri</a>
+        <a class="btn" href="#sss">SSS</a>
+      </div>
+
+      <section class="card card-pad prose" id="panel">
+        <h2>1 · Paneli kullanma</h2>
+        <p>Panel üç katmandan oluşur: <b>Yayın merkezi</b> (özet), <b>Canlı yayınlar</b> (doğrulanmış odalar) ve <b>Sandık radarı</b> (jeton/kontenjan fırsatları). Sol menüdeki tüm bağlantılar bu sayfalara gider.</p>
+        <figure class="figure">
+          <img src="assets/panel.png" alt="Arena Live OS yayın merkezi ekran görüntüsü" />
+          <figcaption>Yayın merkezi: keşif merkezi haritası, canlı stüdyo kartı, QR erişimi ve dört istatistik kartı.</figcaption>
+        </figure>
+        <div class="steps">
+          <div class="step"><div><b>Canlı yayın ağı</b><span>Yeşil kart, son taramada doğrulanan oda sayısını ve kaynak bölgeleri gösterir. "Sandık radarını aç" bağlantısı radar sayfasına gider.</span></div></div>
+          <div class="step"><div><b>Sandık radarı</b><span>Oran = jeton ÷ kontenjan. Yüksek oran, kişi başı daha çok jeton demektir. Kart üzerindeki süre sandığın açılışına kalan zamandır.</span></div></div>
+          <div class="step"><div><b>Canlıya tek tık</b><span>Her kart "Canlıya gir" düğmesiyle TikTok LIVE sayfasını açar. Jeton toplama TikTok uygulamasında yapılır; panel yalnızca zamanında gösterir.</span></div></div>
+          <div class="step"><div><b>Bildirim</b><span>Üst bardaki zil simgesi tarayıcı bildirim iznini ister. Windows uygulaması ise masaüstü bildirimi gönderir.</span></div></div>
+        </div>
+        <figure class="figure">
+          <img src="assets/yayinlar.png" alt="Canlı yayınlar listesi ekran görüntüsü" />
+          <figcaption>Canlı yayınlar: arama, bölge filtresi, izleyici sayısı ve sandıklı odalar.</figcaption>
+        </figure>
+      </section>
+
+      <section class="card card-pad prose" id="windows" style="margin-top:14px">
+        <h2>2 · Windows kurulumu</h2>
+        <p>Kurulum paketi GitHub Actions tarafından üretilir; içinde Node.js gömülüdür, ayrıca bir şey kurman gerekmez. Yönetici izni istemez, kullanıcı hesabına kurulur.</p>
+        <div class="steps">
+          <div class="step"><div><b>Kurulum paketini indir</b><span><a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">ArenaRadar-Setup.exe</a> — imzasız açık kaynak kurulum. Windows SmartScreen uyarısı çıkarsa "Daha fazla bilgi → Yine de çalıştır".</span></div></div>
+          <div class="step"><div><b>Kur ve aç</b><span>Masaüstü ve Başlangıç menüsüne "Arena Radar" kısayolu eklenir. Uygulama arka planda çalışır, tarayıcıda paneli açar.</span></div></div>
+          <div class="step"><div><b>Veriyi doğrula</b><span>Panelde "GitHub Radar" rozeti yeşilse veri akıyor demektir. İlk açılışta yerel keşif turu 1-3 dakika sürebilir.</span></div></div>
+          <div class="step"><div><b>Bildirimleri aç</b><span>Ayarlar → "Test bildirimi" ile masaüstü bildirimini dene. Sandık açılmadan önce uyarı gelir.</span></div></div>
+        </div>
+        <div class="banner">Kurulum sonrası ilk açılışta Windows Güvenlik Duvarı yalnızca yerel panel portu (4817) için soru sorabilir. Yerel ağdan erişim istemiyorsan "Özel ağlar" yeterlidir.</div>
+        <p style="margin-top:12px"><b>Güncelleme:</b> Uygulama açılışta <code>/api/update/check</code> ile yeni sürümü denetler; "Güncelle" dediğinde kurulum paketini indirir ve kendini yeniden başlatır. Elle güncelleme için yeni Setup dosyasını çalıştırman yeterlidir.</p>
+      </section>
+
+      <section class="card card-pad prose" id="otomasyon" style="margin-top:14px">
+        <h2>3 · Tam otomatik tarama</h2>
+        <p>Taramayı sen başlatmıyorsun. İki bağımsız kaynak sürekli çalışır ve sonuçları birleştirir:</p>
+        <h3>GitHub Actions</h3>
+        <p><code>.github/workflows/radar.yml</code> her 5 dakikada bir çalışır. Aday yayıncıları Tik.Tools, TikWM ve bölge dizinlerinden toplar; <code>user/room</code> ve <code>check_alive</code> ile canlılığı doğrular; canlı odalar için <code>room/info</code> sandık zarfını okur; sonucu <code>web/data/arena-live.json</code> dosyasına yazar ve GitHub Pages'i yayınlar. Bilgisayarın kapalı olsa bile çalışır.</p>
+        <h3>Windows yerel keşif turu</h3>
+        <p>Kurulu uygulama, paket içindeki aynı tarayıcıyı kendi IP'sinden çalıştırır. Bu tur, GitHub taramasının kaçırdığı bölgesel odaları ve sandıkları yakalar; iki veri kaynağından daha yeni olanı gösterir. Ayrıca bilinen odaların <code>room/info</code> zarfı 20 saniyede bir yoklanır, böylece sandık süresi geçmeden bildirim çıkar.</p>
+        <div class="steps">
+          <div class="step"><div><b>Hiçbir şey yapmana gerek yok</b><span>Tarama açılışta ve periyodik olarak kendiliğinden çalışır. "Yenile"ye basmak yalnızca ekranı tazeler.</span></div></div>
+          <div class="step"><div><b>Durumu izle</b><span>Panelde "Son tarama" ve "Kaynak uyarısı" alanları görünür. 15 dakikadan eski veri sarı rozetle işaretlenir.</span></div></div>
+          <div class="step"><div><b>Yalnızca gerçek veri</b><span>Sandıklar tahmin edilmez; TikTok zarfında görünen sandık, jeton ve kontenjan bilgisi kullanılır. Zarf yoksa kart gösterilmez.</span></div></div>
+        </div>
+        <div class="banner info">TikTok otomatik jeton toplamaya izin vermez. Bu sistem sandığı <b>zamanında gösterir</b>, canlıya <b>tek tıkla</b> götürür ve süresi dolmadan bildirir. Jetonu sen toplarsın.</div>
+      </section>
+
+      <section class="card card-pad prose" id="tam-panel" style="margin-top:14px">
+        <h2>4 · Tam panel modülleri</h2>
+        <p>Bu GitHub Pages paneli herkese açık, salt okunur bir vitrindir. Veritabanı, oturum ve yazma işlemleri gerektiren modüller Windows paketindeki tam panelde çalışır:</p>
+        <ul>
+          <li><b>Hesaplar:</b> yayıncı hesapları, takip listesi ve erişim durumu.</li>
+          <li><b>Ajanslar:</b> kadro, sözleşme ve performans grupları.</li>
+          <li><b>Fırsatlar:</b> yüksek oranlı sandık ve yayın fırsatlarının kaydı.</li>
+          <li><b>Gelir:</b> jeton ve hediye akışından türetilen gelir özeti.</li>
+          <li><b>Bot & Uyarılar:</b> masaüstü bildirimi, webhook ve otomatik hatırlatma.</li>
+          <li><b>AI Koç:</b> yayın başlığı, hedef ve içerik önerileri.</li>
+        </ul>
+        <p>Sol menüde kilit simgesi görünen bağlantılar bu yüzden bu sayfaya gelir. Tam panele geçmek için Windows kurulum paketini indir.</p>
+        <figure class="figure">
+          <img src="assets/sandik.png" alt="Sandık radarı ekran görüntüsü" />
+          <figcaption>Sandık radarı: oran, jeton, kontenjan ve açılışa kalan süre. Canlıya tek tıkla götürür.</figcaption>
+        </figure>
+      </section>
+
+      <section class="card card-pad prose" id="overlay" style="margin-top:14px">
+        <h2>5 · Overlay ve OBS</h2>
+        <p>Yerel paneldeki overlay sayfasını OBS'te <b>Browser Source</b> olarak ekle. Widget'lar panel API'sinden beslenir:</p>
+        <pre style="background:#08080f;border:1px solid rgba(255,255,255,.09);border-radius:11px;padding:12px;overflow:auto;font-size:10.5px;color:#9df9f5">&lt;div data-arena="goal" data-username="kullanici" data-goal="5000"&gt;&lt;/div&gt;
+&lt;div data-arena="top-gifters" data-username="kullanici" data-rows="5"&gt;&lt;/div&gt;
+&lt;div data-arena="chat" data-username="kullanici" data-rows="8"&gt;&lt;/div&gt;</pre>
+        <p style="margin-top:10px">Genişlik 1920, yükseklik 1080, "Sayfayı önbelleğe al" kapalı olsun. Overlay arka planı saydamdır.</p>
+      </section>
+
+      <section class="card card-pad prose" id="sss" style="margin-top:14px">
+        <h2>6 · Sık sorulanlar</h2>
+        <h3>Panelde sandık sayısı 0 görünüyor, hata mı?</h3>
+        <p>Hayır. Sandıklar yalnızca TikTok zarfında gerçekten göründüğünde listelenir. Tarama sürerken veya o an sandık yokken 0 kalması normaldir. Bir sonraki tur birkaç dakika içinde çalışır.</p>
+        <h3>Veri ne kadar sürede yenilenir?</h3>
+        <p>GitHub taraması yaklaşık 5 dakikada bir, Windows istemcisi ham veriyi 5 saniyede bir, bilinen odaların zarfını 20 saniyede bir yoklar. Web paneli 10 saniyede bir tazelenir.</p>
+        <h3>Neden bazı menü öğeleri kilitli?</h3>
+        <p>Hesaplar, Ajanslar, Fırsatlar ve Gelir modülleri veritabanı ve oturum gerektirir; statik GitHub panelinde salt okunur vitrin olarak yer alırlar. Tam panel Windows paketindedir.</p>
+        <h3>Jetonlar otomatik toplanıyor mu?</h3>
+        <p>Hayır. TikTok otomatik jeton toplamaya izin vermez. Sistem sandığı süresi dolmadan gösterir, bildirir ve canlıya tek tıkla götürür.</p>
+        <h3>Kurulumu nasıl kaldırırım?</h3>
+        <p>Windows Ayarlar → Uygulamalar → Arena Radar → Kaldır. Kullanıcı verileri <code>%APPDATA%\ArenaRadar</code> altındadır; istersen bu klasörü de silebilirsin.</p>
+        <div class="head-actions" style="margin-top:14px">
+          <a class="btn primary" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows kurulum paketi</a>
+          <a class="btn" href="https://github.com/CehennemGibiyim/ArenaSag/issues" target="_blank" rel="noreferrer">Sorun bildir ↗</a>
+        </div>
+      </section>
+
+      <footer class="site">
+        <span>Arena Live OS · MIT · TikTok ile resmi bağlantısı yoktur.</span>
+        <span><a href="index.html">Panele dön</a> · <a href="ayarlar.html">Ayarlar</a> · <a href="https://github.com/CehennemGibiyim/ArenaSag">GitHub</a></span>
+      </footer>
+    </main>
+  </div>
+</div>
+<script src="arena-data.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>

@@ -8,6 +8,7 @@ on:
       - "desktop/**"
       - "scripts/installer.nsi"
       - "scripts/build-radar-package.mjs"
+      - "scripts/radar-publish.mjs"
       - "scripts/windows/**"
       - ".github/workflows/windows-release.yml"
       - "version.json"

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Canlı Yayınlar & Stüdyo — Arena Live OS</title>
+<meta name="description" content="TikTok LIVE canlı yayın listesi, doğrulanmış odalar ve canlı stüdyo başlatma rehberi." />
+<link rel="stylesheet" href="panel.css" />
+</head>
+<body data-page="yayinlar" data-crumb="Canlı Yayınlar">
+<div class="grid-lines"></div>
+<div class="overlay-backdrop" data-backdrop></div>
+<div class="shell">
+  <aside class="sidebar" data-sidebar></aside>
+  <div class="main">
+    <header class="topbar" data-topbar></header>
+    <main class="content">
+      <div class="banner error" id="loadError" hidden></div>
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Genel bakış · Keşif merkezi</p>
+          <h1>Canlı yayınlar</h1>
+          <p class="lead">GitHub Radar'ın <b>check_alive</b> ile doğruladığı odalar. Liste 5 dakikalık taramalarla ve Windows istemcisinin yerel keşif turuyla kendini yeniler.</p>
+        </div>
+        <div class="head-actions">
+          <a class="btn primary" href="#studio">▷ Stüdyoyu aç</a>
+          <a class="btn" href="sandik.html">◎ Sandık radarı</a>
+        </div>
+      </div>
+
+      <div class="kpi-grid" style="margin-top:0;margin-bottom:14px">
+        <div class="kpi cyan"><div class="kpi-top"><span class="kpi-label">Canlı oda</span><span class="kpi-icon">◉</span></div><strong id="liveCount">—</strong><small>şu an doğrulanmış</small><span class="cta" id="liveFresh">veri yükleniyor</span></div>
+        <div class="kpi pink"><div class="kpi-top"><span class="kpi-label">Toplam izleyici</span><span class="kpi-icon">◍</span></div><strong id="viewerCount">—</strong><small>canlı odalarda</small><span class="cta">anlık</span></div>
+        <div class="kpi violet"><div class="kpi-top"><span class="kpi-label">Bölge</span><span class="kpi-icon">◇</span></div><strong id="regionCount">—</strong><small>kaynak bölgesi</small><span class="cta">örneklem</span></div>
+        <div class="kpi amber"><div class="kpi-top"><span class="kpi-label">Sandıklı oda</span><span class="kpi-icon">▣</span></div><strong id="chestRooms">—</strong><small>radarda sandık var</small><span class="cta">yayın içinde</span></div>
+      </div>
+
+      <section class="card" style="margin-bottom:14px">
+        <div class="toolbar">
+          <input id="q" placeholder="Yayıncı veya başlık ara…" autocomplete="off" style="flex:1;min-width:180px" />
+          <select id="region" title="Bölge"><option value="">Tüm bölgeler</option></select>
+          <select id="sort" title="Sıralama">
+            <option value="viewers">İzleyici</option>
+            <option value="name">Yayıncı adı</option>
+            <option value="chest">Sandıklı önce</option>
+          </select>
+          <button class="btn sm" id="refresh">↻ Yenile</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Yayıncı</th><th>Başlık</th><th>İzleyici</th><th>Bölge</th><th>Kaynak</th><th></th></tr></thead>
+            <tbody id="rows"><tr><td colspan="6" class="empty">Canlı yayınlar yükleniyor…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="studio">
+        <div class="card-head">
+          <div><h3>Canlı stüdyo</h3><p>Gerçek TikTok Webcast bağlantısı · tam panelde WebSocket oturumu</p></div>
+          <span class="chip live"><i class="dot" style="width:5px;height:5px"></i>LIVE</span>
+        </div>
+        <div class="card-pad prose">
+          <p><b>Stüdyo nedir?</b> Bir yayıncının odasına bağlanıp sohbeti, hediyeleri ve jeton akışını canlı izleyen oturumdur. Bu statik GitHub paneli tarama verisini gösterir; WebSocket oturumu ve jeton toplama <b>Windows paketindeki tam panelde</b> çalışır.</p>
+          <div class="steps">
+            <div class="step"><div><b>Yayıncıyı seç</b><span>Yukarıdaki listeden canlı bir oda aç veya kullanıcı adını kopyala.</span></div></div>
+            <div class="step"><div><b>Windows panelini aç</b><span>Masaüstü kısayolu veya <code>http://127.0.0.1:4817</code> adresi. Giriş gerektirmez, yalnızca yerel çalışır.</span></div></div>
+            <div class="step"><div><b>Stüdyoya bağlan</b><span>Kullanıcı adını gir; panel <code>user/room</code> + <code>check_alive</code> ile doğrular ve Webcast bağlantısını kurar.</span></div></div>
+            <div class="step"><div><b>Overlay'i OBS'e ekle</b><span>Hedef, hediye ve sohbet widget'larını browser source olarak ekle. Bkz. <a href="yardim.html#overlay">Overlay rehberi</a>.</span></div></div>
+          </div>
+          <div class="banner info" style="margin:14px 0 0">Otomatik jeton toplama TikTok tarafından sunulmaz. Panel sandığı süresi dolmadan gösterir ve canlıya tek tıkla götürür; jetonu sen toplarsın.</div>
+          <div class="head-actions" style="margin-top:14px">
+            <a class="btn primary" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows panelini indir</a>
+            <a class="btn" href="yardim.html">Kurulum rehberi</a>
+          </div>
+        </div>
+      </section>
+
+      <footer class="site">
+        <span>Arena Live OS · yalnızca kamuya açık yayın verisi · TikTok resmi API'si değildir.</span>
+        <span><a href="index.html">Panel</a> · <a href="sandik.html">Sandık radarı</a> · <a href="yardim.html">Yardım</a></span>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<script src="arena-data.js"></script>
+<script src="panel.js"></script>
+<script>
+(function () {
+  var D = window.ArenaData;
+  var state = { snapshot: null, q: "", region: "", sort: "viewers" };
+
+  function el(id) { return document.getElementById(id); }
+  function chestsFor(username) {
+    return ((state.snapshot && state.snapshot.chests) || []).filter(function (chest) {
+      return chest.username === username;
+    });
+  }
+
+  function regionName(code) {
+    var names = { TR: "Türkiye", KZ: "Kazakistan", PH: "Filipinler", AZ: "Azerbaycan", US: "ABD", DE: "Almanya", RU: "Rusya", BR: "Brezilya", ID: "Endonezya", VN: "Vietnam", TH: "Tayland", MY: "Malezya", SA: "Suudi Arabistan", AE: "BAE", GB: "Birleşik Krallık" };
+    return names[code] || code || "—";
+  }
+
+  function render() {
+    if (!state.snapshot) return;
+    var streams = (state.snapshot.streams || []).slice();
+    var query = state.q.trim().toLowerCase();
+    if (query) {
+      streams = streams.filter(function (stream) {
+        return ((stream.username || "") + " " + (stream.nickname || "") + " " + (stream.title || "")).toLowerCase().indexOf(query) >= 0;
+      });
+    }
+    if (state.region) {
+      streams = streams.filter(function (stream) { return (stream.region || "") === state.region; });
+    }
+    streams.sort(function (a, b) {
+      if (state.sort === "name") return String(a.username || "").localeCompare(String(b.username || ""), "tr");
+      if (state.sort === "chest") return chestsFor(b.username).length - chestsFor(a.username).length;
+      return Number(b.viewers || 0) - Number(a.viewers || 0);
+    });
+
+    var rows = el("rows");
+    rows.innerHTML = "";
+    if (!streams.length) {
+      rows.innerHTML = '<tr><td colspan="6" class="empty"><strong>Eşleşen canlı yayın yok</strong>Filtreyi temizle veya bir sonraki taramayı bekle.</td></tr>';
+    } else {
+      streams.forEach(function (stream) {
+        var chests = chestsFor(stream.username);
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td><div style="display:flex;align-items:center;gap:8px"><span class="avatar">' +
+          D.escapeHtml((stream.nickname || stream.username || "?").slice(0, 2).toUpperCase()) + '</span><div><div style="font-weight:700">@' +
+          D.escapeHtml(stream.username) + '</div><div class="muted" style="font-size:9.5px">' +
+          (chests.length ? '<span class="tag gold">' + chests.length + ' sandık</span>' : '<span class="tag live">canlı</span>') +
+          '</div></div></div></td>' +
+          '<td><div style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + D.escapeHtml(stream.title || "—") + '</div></td>' +
+          '<td style="font-variant-numeric:tabular-nums;font-weight:700">' + D.formatNumber(stream.viewers) + '</td>' +
+          '<td class="muted">' + D.escapeHtml(regionName(stream.region)) + '</td>' +
+          '<td class="muted mono">' + D.escapeHtml(stream.source || "radar") + '</td>' +
+          '<td><a class="btn sm" target="_blank" rel="noreferrer" href="' +
+          D.escapeHtml(stream.openUrl || D.liveUrl(stream.username)) + '">Aç ↗</a></td>';
+        rows.appendChild(tr);
+      });
+    }
+
+    var viewers = (state.snapshot.streams || []).reduce(function (sum, stream) { return sum + Number(stream.viewers || 0); }, 0);
+    var regions = {};
+    (state.snapshot.streams || []).forEach(function (stream) { if (stream.region) regions[stream.region] = true; });
+    var chestRooms = {};
+    ((state.snapshot.chests || [])).forEach(function (chest) { if (chest.username) chestRooms[chest.username] = true; });
+
+    el("liveCount").textContent = D.formatNumber((state.snapshot.streams || []).length);
+    el("viewerCount").textContent = D.formatNumber(viewers);
+    el("regionCount").textContent = Object.keys(regions).length || (state.snapshot.regions || []).length;
+    el("chestRooms").textContent = D.formatNumber(Object.keys(chestRooms).length);
+    el("liveFresh").textContent = "veri " + window.ArenaPanel.ageText();
+
+    var select = el("region");
+    if (select.options.length <= 1) {
+      (state.snapshot.regions || []).forEach(function (region) {
+        if (!region || !region.code) return;
+        var option = document.createElement("option");
+        option.value = region.code;
+        option.textContent = regionName(region.code);
+        select.appendChild(option);
+      });
+    }
+  }
+
+  window.PanelPage = {
+    render: function (data) {
+      state.snapshot = data;
+      render();
+    },
+    tick: function () { /* tablo saniyelik sayaç içermiyor */ },
+    search: function (query) {
+      state.q = query;
+      el("q").value = query;
+      render();
+    },
+    error: function (message) {
+      var banner = el("loadError");
+      banner.hidden = false;
+      banner.textContent = "Veri alınamadı: " + message;
+    },
+  };
+
+  el("q").addEventListener("input", function () { state.q = el("q").value; render(); });
+  el("region").addEventListener("change", function () { state.region = el("region").value; render(); });
+  el("sort").addEventListener("change", function () { state.sort = el("sort").value; render(); });
+  el("refresh").addEventListener("click", function () { window.ArenaPanel.load(); });
+
+  var params = new URLSearchParams(location.search);
+  if (params.get("q")) {
+    state.q = params.get("q");
+    el("q").value = state.q;
+  }
+})();
+</script>
+</body>
+</html>

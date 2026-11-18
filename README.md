@@ -1,103 +1,190 @@
 # Arena Live OS
 
-TikTok LIVE ajansları için uçtan uca işletim paneli. Next.js (App Router) + PostgreSQL + Drizzle ORM üzerine kurulu; `tiktok-live-connector` ile erişilebilen gerçek LIVE olaylarını okur; veri yoksa uydurma sandık üretmez.
+TikTok LIVE ajansları için **sürekli çalışan radar**, canlı yayın ağı ve Windows bildirim uygulaması.
+Panel kapalıyken bile GitHub Actions tarar; sonuç GitHub Pages'te yayınlanır ve Windows istemcisi aynı veriyi saniyeler içinde gösterir.
 
-> Bu sürüm, `CehennemGibiyim/Arena` deposunun (TikTok ajans paneli) incelenmesi ve TikTok ekosistemindeki açık kaynak kütüphanelerin analizi sonrası geliştirilmiştir.
->
-> **GERÇEK VERİ KURALI:** Panelde demo/simülasyon verisi YOKTUR. Canlı durum, izleyici sayısı, hediye elması ve sandık zarfı yalnızca gerçek TikTok uçlarından gelir. Yayında olmayan hesap için oturum açılmaz; veri yoksa liste boş kalır ve neden açıklanır.
->
-> **KEŞİF KAPSAMI:** [Ücretsiz kaynaklar, gerçek kapsam ve dinleme bütçeleri](docs/RADAR-DINLEME.md). Tik.Tools örneklemi, ülke etiketli yayıncı dizini, TikWM bölgesel adayları ve ortak yayıncılar canlılık kontrolünden geçer. Hiçbir kaynak tüm dünya yayınlarının eksiksiz listesi değildir. Ücretli bölge feed’i varsayılan olarak kapalıdır.
->
-> **GITHUB RADAR:** Panel kapalıyken de çalışan sürekli tarama GitHub Actions üzerinde döner, sonucu `web/data/arena-live.json` olarak yayınlar. Web paneli ve Windows uygulaması bu dosyayı okur. Kurulum: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md).
+[![Web paneli](https://img.shields.io/badge/panel-canl%C4%B1-25f4ee?style=flat-square)](https://cehennemgibiyim.github.io/ArenaSag/)
+[![Windows](https://img.shields.io/badge/Windows-kurulum%20paketi-fe2c55?style=flat-square)](https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe)
+[![Radar](https://img.shields.io/badge/GitHub%20Actions-5%20dakikada%20bir-7c5cff?style=flat-square)](https://github.com/CehennemGibiyim/ArenaSag/actions)
+
+> **Gerçek veri kuralı:** Sandık, jeton, kontenjan ve izleyici bilgisi yalnızca TikTok Webcast yanıtında açıkça göründüğünde gösterilir. Tahmin veya demo verisi üretilmez; veri yoksa liste boş kalır ve nedeni yazılır.
+
+## Ekran görüntüleri
+
+| Yayın merkezi | Canlı yayınlar |
+| --- | --- |
+| ![Yayın merkezi](docs/images/panel.png) | ![Canlı yayınlar](docs/images/yayinlar.png) |
+| Keşif merkezi haritası, canlı stüdyo, QR erişimi ve dört istatistik kartı. | Arama, bölge filtresi, izleyici sayısı ve sandıklı odalar. |
+
+![Sandık radarı](docs/images/sandik.png)
+
+> Ekran görüntüleri bu depodaki gerçek panelden alınmıştır. Tarama anında sandık yoksa kartlar boş durum metni gösterir.
+
+---
+
+## 30 saniyede başla
+
+### 1. Web paneli (kurulum yok)
+
+- Panel: **https://cehennemgibiyim.github.io/ArenaSag/**
+- Sandık radarı: **https://cehennemgibiyim.github.io/ArenaSag/sandik.html**
+- Yardım: **https://cehennemgibiyim.github.io/ArenaSag/yardim.html**
+
+Panel herkese açıktır; veri GitHub Actions taramasından gelir. Telefon, tablet veya başka bir bilgisayardan açabilirsin.
+
+### 2. Windows uygulaması (bildirimli)
+
+1. [**ArenaRadar-Setup.exe**](https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe) indir.
+2. Çalıştır — yönetici izni gerekmez, `%LOCALAPPDATA%\Programs\Arena Radar` altına kurulur.
+3. Uygulama açılır; masaüstü ve başlangıç kısayolu oluşur.
+4. İlk açılışta yerel keşif turu başlar; panel `http://127.0.0.1:4817` adresinde açılır.
+
+Windows SmartScreen "bilinmeyen yayıncı" uyarısı verirse **Daha fazla bilgi → Yine de çalıştır**.
+Kurulum paketi imzasızdır; kaynak kod bu depodadır.
+
+### 3. GitHub deposunu kendi hesabına al
+
+1. Depoyu fork'la veya kopyala.
+2. **Settings → Pages → Build and deployment → GitHub Actions**.
+3. **Settings → Actions → General → Workflow permissions → Read and write permissions**.
+4. **Actions → Arena Radar Scan → Run workflow** ile ilk turu başlat.
+5. `https://KULLANICI.github.io/ArenaSag/` adresini aç.
+
+> Zamanlanmış işler GitHub'da en kısa 5 dakikada bir çalışır. Depo 60 gün hareketsiz kalırsa GitHub cron'u durdurur; her push veya manuel çalıştırma sayacı sıfırlar. Windows istemcisi bundan etkilenmez, kendi keşif turunu çalıştırmaya devam eder.
+
+---
+
+## Tam otomatik tarama nasıl çalışır?
+
+İki bağımsız kaynak sürekli tarar ve sonuçlar birleştirilir. Kullanıcı hiçbir taramayı elle başlatmak zorunda değildir.
+
+```
+GitHub Actions · cron */5
+  ├─ aday toplama: Tik.Tools, TikWM bölge örnekleri, yayıncı dizini, önceki odalar
+  ├─ doğrulama: user/room → check_alive
+  ├─ sandık zarfı: room/info → envelopeInfo / envelope_list
+  └─ web/data/arena-live.json + version.json → commit
+                                                ├─ GitHub Pages (web paneli)
+                                                └─ Windows Radar (5 sn'de bir ham veri)
+
+Windows istemcisi · paket içindeki aynı tarayıcı
+  ├─ kendi IP'sinden yerel keşif turu (varsayılan 5 dk)
+  ├─ bilinen odaların zarfını 20 sn'de bir yoklama
+  └─ iki kaynağın en yenisini birleştirip gösterir
+```
+
+- **GitHub taraması** bilgisayar kapalıyken de çalışır.
+- **Yerel keşif turu** GitHub cron'unu beklemez; bölgesel odaları ve sandıkları kendi bağlantından yakalar.
+- **Sandık bildirimi** açılıştan önce (varsayılan 180 sn pencere, oran ≥ 7) Windows balon bildirimi ve ses üretir.
+- **Değişiklik algılama** ham veri 5 saniyede bir, `version.json` 60 saniyede bir denetlenir.
+- **Otomatik jeton toplama TikTok tarafından sunulmaz.** Sistem sandığı zamanında gösterir, bildirir ve canlıya tek tıkla götürür; jetonu sen toplarsın.
+
+Ayrıntılı mimari: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md)
+
+---
+
+## Panel sayfaları
+
+| Sayfa | Adres | Ne yapar |
+| --- | --- | --- |
+| Yayın merkezi | `/` | Keşif merkezi haritası, canlı stüdyo, QR, 4 istatistik kartı, sandık ve yayın özeti |
+| Canlı yayınlar | `/yayinlar.html` | Doğrulanmış odalar, arama, bölge filtresi, canlıya tek tık |
+| Sandık radarı | `/sandik.html` | Oran, jeton, kontenjan, açılışa kalan süre, 12 sekme, filtreler |
+| Yardım | `/yardim.html` | Resimli kurulum, otomatik tarama, SSS |
+| Ayarlar | `/ayarlar.html` | Yenileme sıklığı, veri kaynağı, bildirim izni, tanılama |
+| Overlay | `/overlay.html` | OBS browser source widget'ları |
+
+Sol menüde kilit simgesi görünen **Hesaplar, Ajanslar, Fırsatlar, Gelir, Bot & Uyarılar, AI Koç** modülleri veritabanı ve oturum gerektirir; Windows paketindeki tam panelde çalışır. Statik GitHub panelinde bu bağlantılar yardım sayfasına gider.
 
 ## Öne çıkan sistemler
 
-| Sistem | Açıklama | Uç |
-| --- | --- | --- |
-| **Canlı Stüdyo** | Chat, hediye, beğeni, takip, paylaşım olayları; top gifter tablosu, hedef barı, oturum geçmişi | `/canli`, `POST /api/live/sessions` |
-| **Radar** | Toplu canlı durum kontrolü (`fetchIsLive`), aday skorlama, pipeline yönetimi | `/radar`, `POST /api/live/check` |
-| **Sandık Radarı** | Canlı yayınlardaki sandıkları (treasure chest) ve hediye elmasını ayrı ölçer: jeton, kontenjan, katılan, oran (jeton ÷ kontenjan), izleyici, açılış geri sayımı, QR ile telefondan katılma, manuel jeton toplama. 16 hazır sekme + gelişmiş filtreler + 9 sıralama anahtarı | `/sandik`, `GET /api/chests`, `GET /api/chests/stream` (SSE), `GET /api/chests/export` |
-| **Canlı Yayınlar** | Keşfedilen yayıncılar kalıcıdır; sabitleme (pin), izleyici/sandık/en iyi oran takibi, elle yayıncı ekleme, eşzamanlı tarama görev listesi | `/yayinlar`, `GET /api/rooms`, `PATCH /api/rooms/[id]` |
-| **Eşzamanlı tarayıcı** | Worker pool ile aynı anda N oda paralel dinlenir; her doğrulanmış oda kalıcı `listener_jobs` sırasına eklenir | `POST /api/radar/scan` |
-| **Bölgesel keşif** | Desteklenen pazarlar dönüşümlü örneklenir; aday, sorgulanan bölge ve doğrulanmış oda sayıları ayrıdır | `GET /api/radar/network`, `POST /api/radar/scan` |
-| **Local Agent** | Kendi bilgisayarınızda çalışan paralel toplayıcı; sandık + jeton akışını panele yazar | `agent/arena-agent.mjs`, `POST /api/ingest` |
-| **Chat Botu** | Tetikleyici/yanıt/cooldown kuralları, eşleşme simülatörü, demo akışında otomatik yanıt | `/bot`, `api/resources/commands` |
-| **Uyarı Motoru** | Hediye eşik alarmları, overlay/ses/Telegram aksiyonları | `api/resources/alerts` |
-| **Overlay Sunucusu** | OBS browser source için hedef barı, top gifter, sohbet, alert, stats widget'ları | `/overlay/[slug]`, `GET /api/live/feed` |
-| **GitHub Web Kütüphanesi** | Zero-dependency `arena-widget.js`, GitHub Pages workflow'u, statik overlay | `GET /api/packages/library` |
-| **Windows Paketi** | `KURULUM.bat`, PowerShell sihirbazı, portable başlatıcı, NSIS şablonu | `GET /api/packages/windows` |
-| **GitHub Radar** | GitHub Actions panel/oturum olmadan ~5 dakikada bir taranır; canlı yayınlar ve sandıklar JSON olarak yayınlanır | `scripts/radar-publish.mjs`, `.github/workflows/radar.yml` |
-| **Windows Radar** | GitHub verisini 5 saniyede bir çeken, sandık açılmadan masaüstü bildirimi gönderen hafif istemci; açılışta sürüm denetimi | `desktop/`, `ArenaRadar-Setup.exe` |
-| **Gelir** | Elmas→TL/USD hesaplayıcı, komisyon, tahsilat durumu | `/gelir` |
-| **Fırsatlar / Ajanslar / Hesaplar** | Tam CRUD, CSV dışa aktarım, arama ve filtreler | `/firsatlar`, `/ajanslar`, `/hesaplar` |
-| **AI Koç** | Yayın senaryosu, hediye stratejisi, marka teklifi; OpenAI opsiyonel | `/ai`, `POST /api/ai/chat` |
+| Sistem | Açıklama |
+| --- | --- |
+| **GitHub Radar** | Panel/oturum olmadan ~5 dakikada bir tarama; canlı yayınlar ve sandık zarfları JSON olarak yayınlanır |
+| **Windows Radar** | GitHub verisini 5 saniyede bir çeker; yerel keşif turu çalıştırır; sandık açılmadan bildirir |
+| **Canlı Stüdyo** | Chat, hediye, beğeni, takip olayları; hedef barı ve oturum geçmişi (tam panel) |
+| **Sandık Radarı** | Jeton ÷ kontenjan oranı, 16 hazır sekme, 9 sıralama anahtarı, QR ile telefondan katılma |
+| **Canlı Yayınlar** | Keşfedilen yayıncılar kalıcı; sabitleme, izleyici/sandık/en iyi oran takibi (tam panel) |
+| **Eşzamanlı tarayıcı** | Worker pool ile paralel oda dinleme; doğrulanan odalar kalıcı sıraya eklenir (tam panel) |
+| **Bölgesel keşif** | Desteklenen pazarlar dönüşümlü örneklenir; aday ve doğrulanmış oda sayıları ayrıdır |
+| **Yerel Agent** | Kendi bilgisayarında çalışan paralel toplayıcı; sandık + jeton akışını panele yazar |
+| **Chat Botu / Uyarılar** | Tetikleyici-yanıt kuralları, hediye eşik alarmları, overlay/ses/Telegram aksiyonları |
+| **Overlay Sunucusu** | OBS için hedef barı, top gifter, sohbet, alert ve stats widget'ları |
+| **Gelir / Ajanslar / Fırsatlar** | Elmas→TL/USD, komisyon, tahsilat; tam CRUD ve CSV dışa aktarım (tam panel) |
+| **AI Koç** | Yayın senaryosu, hediye stratejisi ve marka teklifi; OpenAI anahtarı opsiyonel |
 
-## Hata dayanıklılığı
+## Yerel çalıştırma
 
-Tüm API rotaları hata yutar: geçersiz kimlik → `400`, bulunamayan kayıt → `404`, veritabanı/uzak uç hatası → açıklayıcı JSON (liste uçları `200` + `error` alanı ile bozulmadan yanıt verir). Tarayıcı döngüsü hata olsa bile ayakta kalır. QR üretimi başarısız olsa bile SVG fallback döner. UI'da her boş/başarısız durum için açıklama metni vardır.
+### Statik panel + radar
 
-## Hızlı başlangıç
+```bash
+# bağımlılık gerekmez
+node scripts/radar-publish.mjs          # web/data/arena-live.json üretir
+python3 -m http.server 3000 --directory web
+# http://localhost:3000
+```
+
+### Windows istemcisi
+
+```bash
+node desktop/main.mjs                   # http://127.0.0.1:4817
+node desktop/main.mjs --silent          # tarayıcı açmadan arka planda
+```
+
+Paket üretimi:
+
+```bash
+node scripts/build-radar-package.mjs --node-exe /yol/node.exe
+makensis scripts/installer.nsi
+```
+
+### Tam panel (Next.js + PostgreSQL)
 
 ```bash
 npm ci
-cp .env.example .env       # DATABASE_URL düzenle
+cp .env.example .env                    # DATABASE_URL düzenle
 npx drizzle-kit push
 npm run build && npm run start
-# İlk veri:
-# Kurulum verisi + gerçek canlı kontrol (sahte veri üretmez):
 curl -X POST http://localhost:3000/api/demo/seed
 ```
 
-Windows için: `KURULUM.bat` → `Arena-Live-OS.bat`. Detay: [docs/WINDOWS-KURULUM.md](docs/WINDOWS-KURULUM.md)
+Ayrıntı: [docs/WINDOWS-KURULUM.md](docs/WINDOWS-KURULUM.md)
 
-### GitHub'da sürekli radar (önerilen)
+## Ayarlar
 
-```bash
-# yerelde bir tur tarama (GitHub Actions ile aynı betik)
-node scripts/radar-publish.mjs
+Windows uygulamasında **Ayarlar**:
 
-# web panelini yerelde aç
-python -m http.server 8080 --directory web
-
-# Windows istemcisi (panel/PostgreSQL gerekmez)
-node desktop/main.mjs
-```
-
-GitHub'da: Settings → Pages → **GitHub Actions**, Actions → General → **Read and write permissions**,
-sonra **Arena Radar Scan** iş akışını çalıştırın. Kurulum paketi **Windows Radar Release** iş akışıyla
-GitHub Release'e yüklenir. Ayrıntı: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md)
-
-GitHub Pages overlay kütüphanesi: [docs/WEB-KUTUPHANE.md](docs/WEB-KUTUPHANE.md)
-
-## LiveMira premium özellikleri — hepsi ücretsiz
-
-| LiveMira planı | Özellik | Arena |
+| Ayar | Varsayılan | Açıklama |
 | --- | --- | --- |
-| Free | Oran 1, çanta Lv 2–10, açılış sırası | ✅ |
-| Plus | **20/16 sandık**, altın sandık, askıda sandık, oran ≥2, oran ≥4, çanta Lv 0/1, süre filtresi, gelişmiş filtreler | ✅ ücretsiz |
-| Pro | **Kısmet ≥7**, özel filtreler, kalıcı oda sırası | ✅ ücretsiz |
-| Bot servisi | Telegram/Discord uyarısı, paralel dinleme | Sağlayıcı kotası ve yerel kapasite içinde |
-| Uygulama | Mini pencere, ses eşiği, çoklu dil, sabit sıra, duraklat | ✅ `/sandik` |
+| `pollSeconds` | 5 | GitHub ham verisinin yoklanma sıklığı |
+| `alertRatio` | 7 | Bildirim için en düşük jeton/kontenjan oranı |
+| `alertSeconds` | 180 | Sandık açılışına kalan bildirim penceresi |
+| `roomScanSeconds` | 20 | Bilinen odaların zarf yoklaması |
+| `roomScanLimit` | 8 | Her turda yoklanacak oda |
+| `discoverMinutes` | 5 | Yerel keşif turunun sıklığı |
+| `discoverChecks` | 60 | Keşifte doğrulanacak aday sayısı |
+| `discoverRooms` | 25 | Keşifte sandık için sorgulanacak oda |
+| `notifyDesktop`, `sound`, `autoUpdate` | açık | Bildirim, ses ve otomatik güncelleme |
 
-Oran formülü LiveMira ile aynıdır: `oran = jeton ÷ kontenjan` (500 jeton / 100 kişi = 5).
+Ayarlar `%LOCALAPPDATA%\ArenaRadar\config.json` dosyasında tutulur ve güncellemelerde korunur.
+Web paneli ayarları (`/ayarlar.html`) yalnızca tarayıcıda `localStorage`'a yazılır.
 
-## Kütüphane entegrasyonları
+## Dokümantasyon
 
-- **tiktok-live-connector** (Node.js) — canlı motor, gerçek Webcast bağlantısı
-- **TikTokLive** (Python), **TikTokLiveSharp**, **TikTokLiveJava**, **TikTokLiveRust**, **gotiktoklive** — katalogda; dil bazlı genişleme için hazır
-- **SandıkRadar** (orucmehmet-code) — sandık/çanta radarının açık kaynak referans mimarisi: GiftFlow combo sayımı, EnvelopeEvent zarf yakalama, Euler feed keşfi, imzasız canlı kontrol. Arena'nın sandık motoru bu mimariden türetildi
-- **LiveMira (dichvu321)** — dünya çapında sandık keşfi + Telegram bot servisi; Arena'nın sandık radarı bu ürünün açık kaynak karşılığıdır
-- **EulerStream Business API** — bölge bazlı keşif feed'i (varsayılan kapalı; açık sunucu onayı ve anahtar gerekir)
-- **tiklive**, **TikTok-Chat-Reader** — overlay ve chat UI referansları
-- **EulerStream TikTok Live API** — yönetilen WebSocket alternatifi
-- **TikTok-Api**, **tiktok-scraper** — radar ve içerik keşfi için veri kaynakları
+- [GitHub Radar mimarisi ve veri sözleşmesi](docs/GITHUB-RADAR.md)
+- [Windows kurulum rehberi](docs/WINDOWS-KURULUM.md)
+- [Web kütüphanesi ve overlay](docs/WEB-KUTUPHANE.md)
+- [Keşif kapsamı ve dinleme bütçeleri](docs/RADAR-DINLEME.md)
+- [Panel içi resimli yardım](https://cehennemgibiyim.github.io/ArenaSag/yardim.html)
 
-Katalog panelde `/kutuphane` sayfasında canlı olarak listelenir (`library_items` tablosu).
+## Sınırlar
 
-## API
+- Ücretsiz hiçbir kaynak dünyadaki **tüm** yayınların listesini vermez. Tarama; açık örnekleri, bölgesel trendleri ve önceki doğrulanmış odaları kullanır.
+- TikTok uçları veri merkezi IP'lerini zaman zaman sınırlayabilir. Betik elindeki doğrulanmış veriyi korur ve `errors` alanına yazar.
+- GitHub Pages bazı kurumsal ağlarda engellenebilir; Windows uygulaması önce ham GitHub adresini dener.
+- TikTok LIVE verisi resmi olmayan Webcast protokolünden okunur. `tiktok-live-connector` MIT lisanslıdır ve TikTok ile bağlantılı değildir. Yalnızca kamuya açık yayınları okumak için kullanın.
+- Otomatik jeton toplama TikTok tarafından sunulmaz; bu proje yalnızca zamanında gösterim ve tek tıkla erişim sağlar.
 
-`GET /api/rooms` · `POST /api/rooms` · `PATCH/DELETE /api/rooms/[id]` · `POST /api/ingest` (local agent) · `GET /api/chests/export` · `GET /api/health` · `GET /api/live/status` · `GET/POST /api/live/sessions` · `GET /api/live/sessions/[id]` · `GET/POST /api/live/check` · `GET /api/live/feed` · `GET /api/chests` (filtreli sandık listesi + tab sayaçları) · `GET /api/chests/stream` (SSE) · `GET/PATCH/DELETE /api/chests/[id]` (detay, QR, toplama) · `GET/POST /api/radar/scan` (otomatik tarayıcı) · `GET/PUT /api/settings` · `GET/POST /api/resources/[resource]` · `PATCH/DELETE /api/resources/[resource]/[id]` · `GET /api/qr?text=` · `POST /api/ai/chat` · `POST /api/demo/seed?force=1` · `GET /api/packages/windows` · `GET /api/packages/library`
+## Lisans
 
-## Uyarı
-
-TikTok LIVE verisi resmi olmayan Webcast protokolünden okunur. `tiktok-live-connector` MIT lisanslıdır ve TikTok ile bağlantılı değildir. Yalnızca kamuya açık yayınları okumak için kullanın.
+MIT. TikTok ile resmi bağlantısı yoktur.

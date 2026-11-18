@@ -96,6 +96,12 @@ node desktop\main.mjs
 :: http://127.0.0.1:4817
 ```
 
+İstemci, paket içindeki `scripts/radar-publish.mjs` dosyasını `ARENA_OUT_DIR=%LOCALAPPDATA%\ArenaRadar\data` ile çalıştırır.
+Böylece GitHub cron'u gecikse bile yerel keşif turu yeni odaları ve sandıkları bulur; iki kaynağın en yeni verisi gösterilir.
+Yerel turu panelden **Yerel tara** düğmesiyle veya `POST /api/discover` ile hemen başlatabilirsin.
+
+Statik panel sayfaları: `index.html` (yayın merkezi), `yayinlar.html`, `sandik.html`, `yardim.html`, `ayarlar.html`.
+
 ## Windows uygulaması
 
 | Özellik | Ayrıntı |
@@ -103,6 +109,7 @@ node desktop\main.mjs
 | Veri kaynağı | Önce `raw.githubusercontent.com`, sonra GitHub Pages |
 | Tazeleme | Varsayılan 5 sn (3–120 sn arası ayarlanabilir) |
 | Yerel sandık taraması | Canlı odaların zarf bilgisi 20 sn'de bir doğrudan TikTok'tan okunur (GitHub turunu beklemez) |
+| Yerel keşif turu | Paket içindeki `scripts/radar-publish.mjs` varsayılan 5 dakikada bir kendi IP'nden çalışır; GitHub verisiyle birleştirilir |
 | Bildirim | Oran eşiği + açılış penceresi; Windows balon bildirimi |
 | Güncelleme | Açılışta ve 10 dakikada bir GitHub Release denetimi; otomatik indirme |
 | Değişiklik algılama | `version.json` her 60 sn, veri her 5 sn |
@@ -119,6 +126,8 @@ Windows uygulamasında **Ayarlar**:
 - `pollSeconds` — veri tazeleme (varsayılan 5)
 - `alertRatio` — bildirim için minimum oran (varsayılan 7)
 - `alertSeconds` — açılışa kalan süre penceresi (varsayılan 180)
+- `discoverMinutes` — yerel keşif turu sıklığı (varsayılan 5)
+- `discoverChecks` / `discoverRooms` — keşifte doğrulanacak aday ve sandık için taranacak oda
 - `notifyDesktop`, `sound`, `autoUpdate`
 
 Ayarlar `%LOCALAPPDATA%\ArenaRadar\config.json` dosyasında tutulur ve güncellemelerde korunur.

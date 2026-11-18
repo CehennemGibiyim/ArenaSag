@@ -35,6 +35,7 @@ fs.rmSync(STAGE, { recursive: true, force: true });
 fs.mkdirSync(STAGE, { recursive: true });
 
 copy("desktop");
+copy("scripts/radar-publish.mjs");
 copy("version.json");
 
 const launcher = [

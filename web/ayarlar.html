@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Ayarlar — Arena Live OS</title>
+<meta name="description" content="Arena Live OS panel ayarları: yenileme sıklığı, veri kaynağı, bildirimler ve tanılama." />
+<link rel="stylesheet" href="panel.css" />
+</head>
+<body data-page="ayarlar" data-crumb="Ayarlar">
+<div class="grid-lines"></div>
+<div class="overlay-backdrop" data-backdrop></div>
+<div class="shell">
+  <aside class="sidebar" data-sidebar></aside>
+  <div class="main">
+    <header class="topbar" data-topbar></header>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Platform · Yapılandırma</p>
+          <h1>Ayarlar</h1>
+          <p class="lead">Bu ayarlar yalnızca bu tarayıcıda saklanır; sunucuya gönderilmez. Windows istemcisinin kendi ayar dosyası vardır.</p>
+        </div>
+        <div class="head-actions">
+          <a class="btn" href="yardim.html">Yardım</a>
+          <a class="btn primary" href="index.html">Panele dön</a>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <section class="card">
+          <div class="card-head"><div><h3>Panel davranışı</h3><p>Veri tazeleme ve görünüm</p></div><span class="chip mint">yerel</span></div>
+          <div class="card-pad">
+            <div class="field"><div>Yenileme sıklığı<small>5–120 saniye · varsayılan 10</small></div><input type="number" id="refresh" min="5" max="120" step="5" value="10" /></div>
+            <div class="field"><div>Veri adresi<small>Boş = GitHub Radar (ham veri + Pages)</small></div><input type="text" id="dataUrl" placeholder="https://…/arena-live.json" /></div>
+            <div class="field"><div>Panel API adresi<small>Yerel Windows paneli · isteğe bağlı</small></div><input type="text" id="panelUrl" placeholder="http://127.0.0.1:4817" /></div>
+            <div class="field"><div>Bildirimler<small>Sandık açılmadan önce tarayıcı uyarısı</small></div><button class="btn sm" id="notifyBtn">İzin ver</button></div>
+            <div class="field"><div>Test bildirimi<small>İzin verildiyse hemen dener</small></div><button class="btn sm" id="testBtn">Gönder</button></div>
+            <div class="head-actions" style="margin-top:14px">
+              <button class="btn primary" id="save">Ayarları kaydet</button>
+              <button class="btn" id="reset">Varsayılana dön</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><h3>Veri durumu</h3><p>Son başarılı yükleme</p></div><span class="chip" id="healthChip">—</span></div>
+          <div class="card-pad">
+            <div class="field"><div>Kaynak<small>Ham GitHub veya Pages</small></div><span class="mono" id="source">—</span></div>
+            <div class="field"><div>Üretim zamanı<small>radar taraması</small></div><span class="mono" id="generated">—</span></div>
+            <div class="field"><div>Veri yaşı<small>otomatik güncellenir</small></div><span class="mono" id="age">—</span></div>
+            <div class="field"><div>Tarama süresi<small>son tur</small></div><span class="mono" id="scan">—</span></div>
+            <div class="field"><div>Canlı oda / sandık<small>son doğrulanan</small></div><span class="mono" id="counts">—</span></div>
+            <div class="head-actions" style="margin-top:14px">
+              <button class="btn" id="reload">↻ Şimdi yenile</button>
+              <a class="btn" href="https://github.com/CehennemGibiyim/ArenaSag/actions" target="_blank" rel="noreferrer">Actions ↗</a>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="card card-pad prose" style="margin-top:14px">
+        <h2>Windows istemcisi ayarları</h2>
+        <p>Masaüstü uygulamasının kendi ayar dosyası <code>%APPDATA%\ArenaRadar\config.json</code> yolundadır. Panelden <b>Ayarlar → Yeniden tara</b> ile yerel keşif turunu elle başlatabilir, <b>Test bildirimi</b> ile masaüstü uyarısını deneyebilirsin.</p>
+        <table class="data" style="margin-top:8px">
+          <thead><tr><th>Ayar</th><th>Varsayılan</th><th>Açıklama</th></tr></thead>
+          <tbody>
+            <tr><td><code>refreshSeconds</code></td><td>5</td><td>GitHub ham verisinin yoklanma sıklığı.</td></tr>
+            <tr><td><code>roomPollSeconds</code></td><td>20</td><td>Bilinen odaların sandık zarfı yoklaması.</td></tr>
+            <tr><td><code>discoverMinutes</code></td><td>5</td><td>Yerel keşif turunun sıklığı.</td></tr>
+            <tr><td><code>chestLeadSeconds</code></td><td>90</td><td>Sandık açılışından kaç saniye önce bildirim.</td></tr>
+            <tr><td><code>minRatio</code></td><td>0</td><td>Bildirim için en düşük jeton/kontenjan oranı.</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:10px">Ayrıntılar: <a href="https://github.com/CehennemGibiyim/ArenaSag/blob/main/docs/WINDOWS-KURULUM.md" target="_blank" rel="noreferrer">Windows kurulum belgesi ↗</a></p>
+      </section>
+
+      <footer class="site">
+        <span>Arena Live OS · ayarlar localStorage'da tutulur.</span>
+        <span><a href="index.html">Panel</a> · <a href="yardim.html">Yardım</a> · <a href="https://github.com/CehennemGibiyim/ArenaSag">GitHub</a></span>
+      </footer>
+    </main>
+  </div>
+</div>
+<script src="arena-data.js"></script>
+<script src="panel.js"></script>
+<script>
+(function () {
+  var D = window.ArenaData;
+  function el(id) { return document.getElementById(id); }
+  function read(key, fallback) {
+    try { return localStorage.getItem(key) || fallback || ""; } catch (error) { return fallback || ""; }
+  }
+  function write(key, value) {
+    try {
+      if (value) localStorage.setItem(key, value);
+      else localStorage.removeItem(key);
+    } catch (error) { /* özel mod */ }
+  }
+
+  var refreshInput = el("refresh");
+  var dataInput = el("dataUrl");
+  var panelInput = el("panelUrl");
+  refreshInput.value = read("arenaRefresh", "10");
+  dataInput.value = read("arenaData", "");
+  panelInput.value = read("arenaPanel", "");
+
+  function paintNotify() {
+    if (!("Notification" in window)) {
+      el("notifyBtn").textContent = "Desteklenmiyor";
+      el("notifyBtn").disabled = true;
+      return;
+    }
+    el("notifyBtn").textContent =
+      Notification.permission === "granted" ? "Açık" : Notification.permission === "denied" ? "Engelli" : "İzin ver";
+  }
+  paintNotify();
+
+  el("notifyBtn").addEventListener("click", function () {
+    if (!("Notification" in window)) return;
+    Notification.requestPermission().then(function () {
+      paintNotify();
+      window.ArenaPanel.toast(Notification.permission === "granted" ? "Bildirimler açıldı." : "Bildirim izni verilmedi.");
+    });
+  });
+
+  el("testBtn").addEventListener("click", function () {
+    if (!("Notification" in window)) return window.ArenaPanel.toast("Tarayıcı bildirimleri desteklenmiyor.");
+    if (Notification.permission !== "granted") return window.ArenaPanel.toast("Önce bildirim izni ver.");
+    new Notification("Arena Live OS", { body: "Test bildirimi · sandık radarı hazır." });
+  });
+
+  el("save").addEventListener("click", function () {
+    var seconds = Math.max(5, Math.min(120, Number(refreshInput.value) || 10));
+    refreshInput.value = seconds;
+    write("arenaRefresh", String(seconds));
+    write("arenaData", dataInput.value.trim());
+    write("arenaPanel", panelInput.value.trim().replace(/\/+$/, ""));
+    window.ArenaPanel.setRefresh(seconds);
+    window.ArenaPanel.toast("Ayarlar kaydedildi. Veri adresi değiştiyse sayfa yenilenir.");
+    setTimeout(function () { window.location.reload(); }, 900);
+  });
+
+  el("reset").addEventListener("click", function () {
+    write("arenaRefresh", "");
+    write("arenaData", "");
+    write("arenaPanel", "");
+    window.ArenaPanel.toast("Varsayılanlara dönüldü.");
+    setTimeout(function () { window.location.reload(); }, 700);
+  });
+
+  el("reload").addEventListener("click", function () { window.ArenaPanel.load(); });
+
+  var timer = setInterval(function () {
+    var snapshot = window.ArenaPanel.state.snapshot;
+    if (!snapshot) return;
+    el("source").textContent = window.ArenaPanel.state.source || "—";
+    el("generated").textContent = snapshot.generatedAt ? new Date(snapshot.generatedAt).toLocaleString("tr-TR") : "—";
+    el("age").textContent = window.ArenaPanel.ageText();
+    el("scan").textContent = snapshot.scanSeconds ? snapshot.scanSeconds + " sn" : "—";
+    el("counts").textContent = (snapshot.streams || []).length + " oda / " + (snapshot.chests || []).length + " sandık";
+    var stale = D.ageSeconds(snapshot) > 900;
+    el("healthChip").textContent = stale ? "gecikti" : "sağlıklı";
+    el("healthChip").className = "chip" + (stale ? "" : " mint");
+  }, 1000);
+  window.addEventListener("beforeunload", function () { clearInterval(timer); });
+})();
+</script>
+</body>
+</html>

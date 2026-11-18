@@ -10,7 +10,8 @@ Windows uygulamasını kur:
 1. [ArenaRadar-Setup.exe](https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe) indir.
 2. Çalıştır. Kurulum `%LOCALAPPDATA%\Programs\Arena Radar` altına yapılır; **yönetici izni gerekmez**.
 3. Uygulama açılır, masaüstü ve başlangıç kısayolları oluşur.
-4. Veri GitHub Actions taramasından gelir: `web/data/arena-live.json`.
+4. Veri GitHub Actions taramasından (`web/data/arena-live.json`) ve uygulamanın kendi yerel keşif turundan gelir.
+5. Panel içi resimli rehber: uygulamada **Web radar → Yardım** veya doğrudan `https://cehennemgibiyim.github.io/ArenaSag/yardim.html`.
 
 | Özellik | Davranış |
 | --- | --- |
@@ -19,6 +20,7 @@ Windows uygulamasını kur:
 | Bildirim | Yeni sandıkta oran ≥ 7 ve açılışa ≤ 180 sn varsa Windows balon bildirimi + ses |
 | Güncelleme | Açılışta ve 10 dakikada bir GitHub Release denetimi; yeni sürüm otomatik indirilir |
 | Değişiklik algılama | `version.json` 60 sn'de bir, veri 5 sn'de bir denetlenir |
+| Yerel keşif | Paket içindeki tarayıcı 5 dakikada bir kendi IP'nden aday toplar; GitHub verisiyle birleştirilir. Panelden **Yerel tara** ile hemen çalıştırılabilir |
 | Arka plan | Başlangıç kısayolu `--silent` ile tarayıcı açmadan çalıştırır |
 | Kaldırma | Ayarlar → Uygulamalar → Arena Radar |
 

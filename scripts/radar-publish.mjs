@@ -17,14 +17,18 @@
  *   ARENA_MAX_ROOMS     Sandık için sorgulanacak en fazla canlı oda (varsayılan 45)
  *   ARENA_MAX_CHEST_AGE Saat cinsinden sandık hafızası (varsayılan 6)
  *   ARENA_STREAMERS     Ek yayıncı listesi (@a,@b)
+ *   ARENA_OUT_DIR       Çıktı klasörü (varsayılan: web/data; Windows istemcisi kendi veri klasörünü verir)
+ *   ARENA_OUT_FILE      Çıktı dosya adı (varsayılan: arena-live.json)
  */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const OUT_DIR = path.join(ROOT, "web", "data");
-const OUT_FILE = path.join(OUT_DIR, "arena-live.json");
+const OUT_DIR = process.env.ARENA_OUT_DIR
+  ? path.resolve(process.env.ARENA_OUT_DIR)
+  : path.join(ROOT, "web", "data");
+const OUT_FILE = path.join(OUT_DIR, process.env.ARENA_OUT_FILE || "arena-live.json");
 const VERSION_FILE = path.join(OUT_DIR, "version.json");
 
 const REPO = process.env.ARENA_GITHUB_REPO || "CehennemGibiyim/ArenaSag";

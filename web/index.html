@@ -4,284 +4,346 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
-<title>Arena Radar — TikTok LIVE sandık ve yayın taraması</title>
-<meta name="description" content="GitHub üzerinde sürekli çalışan TikTok LIVE taraması: canlı yayıncılar, sandıklar, jeton oranı ve Windows bildirim uygulaması." />
-<style>
-  *{box-sizing:border-box}
-  body{margin:0;background:radial-gradient(900px 560px at 10% -12%,rgba(37,244,238,.16),transparent),radial-gradient(760px 520px at 92% 0,rgba(254,44,85,.18),transparent),#050509;color:#eef0fa;font-family:Inter,'Segoe UI',system-ui,-apple-system,sans-serif;padding:26px 18px 48px}
-  .wrap{max-width:1120px;margin:0 auto}
-  nav{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .brand{display:flex;align-items:center;gap:11px;font-weight:900;letter-spacing:.2em;font-size:12px}
-  .mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#25f4ee,#fe2c55);display:grid;place-items:center;color:#05060a;font-weight:900;letter-spacing:0}
-  .navlinks{display:flex;gap:6px;flex-wrap:wrap}
-  .navlinks a{color:rgba(238,240,250,.62);font-size:11.5px;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,.09);padding:6px 10px;border-radius:9px;background:rgba(255,255,255,.03)}
-  .navlinks a:hover{color:#fff;border-color:rgba(255,255,255,.22)}
-  .navlinks a.primary{background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;border:0}
-  h1{font-size:clamp(30px,5.4vw,54px);line-height:1.02;letter-spacing:-.035em;margin:34px 0 14px;max-width:900px}
-  h1 span{background:linear-gradient(96deg,#8ffcf8,#b9a7ff 52%,#ff8aa4);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .lead{color:rgba(238,240,250,.62);font-size:13.5px;line-height:1.75;max-width:720px;margin:0}
-  .lead b{color:#eef0fa}
-  .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px;font-size:11px;color:rgba(238,240,250,.45)}
-  .pill{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:99px;padding:5px 10px;font-size:10px;font-weight:800;letter-spacing:.04em}
-  .dot{width:6px;height:6px;border-radius:99px;background:#2ee6a8;box-shadow:0 0 10px #2ee6a8}
-  .dot.warn{background:#ffa62b;box-shadow:0 0 10px #ffa62b}
-  .dot.bad{background:#ff3b5c;box-shadow:0 0 10px #ff3b5c}
-  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:18px}
-  .stat{border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.032);border-radius:13px;padding:11px 12px}
-  .stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-  .stat span{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:rgba(238,240,250,.35)}
-  section{margin-top:34px}
-  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-  h2{font-size:17px;letter-spacing:-.01em;margin:0}
-  .head p{margin:4px 0 0;font-size:11.5px;color:rgba(238,240,250,.42)}
-  .head a{font-size:11.5px;font-weight:800;color:#9df9f5;text-decoration:none}
-  .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-  .card{position:relative;border:1px solid rgba(255,255,255,.1);background:linear-gradient(160deg,rgba(255,255,255,.052),rgba(255,255,255,.014));border-radius:14px;padding:13px;overflow:hidden}
-  .card.open{border-color:rgba(254,44,85,.48)}
-  .card.gold{border-color:rgba(245,182,66,.42)}
-  .row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-  .who{font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .sub{font-size:10px;color:rgba(238,240,250,.42);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .timer{font-size:16px;font-weight:900;font-variant-numeric:tabular-nums;text-align:right}
-  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}
-  .m{border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:5px;text-align:center;background:rgba(0,0,0,.26)}
-  .m b{display:block;font-size:13px;font-variant-numeric:tabular-nums}
-  .m span{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:rgba(238,240,250,.35)}
-  .open-live{display:block;margin-top:9px;text-align:center;padding:8px;border-radius:9px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:900;font-size:11.5px;text-decoration:none}
-  .stream{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);border-radius:12px;padding:9px 12px;margin-bottom:7px}
-  .stream a{font-size:11px;font-weight:800;color:#9df9f5;text-decoration:none;white-space:nowrap}
-  .live-tag{display:inline-block;background:rgba(254,44,85,.16);border:1px solid rgba(254,44,85,.4);color:#ff9eb2;font-size:8px;font-weight:900;letter-spacing:.1em;padding:2px 6px;border-radius:5px;vertical-align:middle}
-  .empty{padding:30px 16px;text-align:center;color:rgba(238,240,250,.42);font-size:12px;border:1px dashed rgba(255,255,255,.12);border-radius:14px}
-  .empty b{display:block;color:#eef0fa;font-size:13px;margin-bottom:5px}
-  .cols{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
-  .panel{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.032);border-radius:16px;padding:16px}
-  .panel h3{margin:0 0 6px;font-size:14px}
-  .panel p{margin:0;font-size:11.5px;line-height:1.7;color:rgba(238,240,250,.5)}
-  .steps{counter-reset:step;display:grid;gap:9px;margin-top:12px}
-  .step{display:flex;gap:10px;align-items:flex-start}
-  .step::before{counter-increment:step;content:counter(step);flex:none;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:10px;font-weight:900;color:#9df9f5;border:1px solid rgba(37,244,238,.3);background:rgba(37,244,238,.1)}
-  .step b{display:block;font-size:11.5px}
-  .step span{font-size:10.5px;color:rgba(238,240,250,.42);line-height:1.6}
-  .btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
-  .btn{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:900;font-size:12px;padding:9px 14px;border-radius:10px;text-decoration:none}
-  .btn.ghost{background:rgba(255,255,255,.06);color:#eef0fa;border:1px solid rgba(255,255,255,.12);font-weight:700}
-  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
-  pre{background:#08080f;border:1px solid rgba(255,255,255,.09);border-radius:11px;padding:12px;overflow:auto;margin:10px 0 0;color:#9df9f5}
-  .note{border:1px solid rgba(255,166,43,.24);background:rgba(255,166,43,.06);color:#ffd79b;border-radius:10px;padding:9px 11px;font-size:10.5px;line-height:1.65;margin-top:12px}
-  footer{margin-top:38px;font-size:10px;color:rgba(238,240,250,.3);line-height:1.8}
-  footer a{color:rgba(157,249,245,.72)}
-  .err{color:#ff9eb2;font-size:11px;margin-top:10px}
-</style>
+<title>Arena Live OS — TikTok LIVE ajans paneli</title>
+<meta name="description" content="Arena Live OS: GitHub üzerinde sürekli çalışan TikTok LIVE taraması, canlı yayın ağı, sandık radarı ve Windows bildirim uygulaması." />
+<link rel="stylesheet" href="panel.css" />
 </head>
-<body>
-<div class="wrap">
-  <nav>
-    <div class="brand"><span class="mark">A</span> ARENA RADAR</div>
-    <div class="navlinks">
-      <a href="sandik.html">Sandık radarı</a>
-      <a href="overlay.html" target="_blank" rel="noreferrer">Overlay</a>
-      <a href="https://github.com/CehennemGibiyim/ArenaSag" target="_blank" rel="noreferrer">GitHub</a>
-      <a class="primary" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows'u indir</a>
-    </div>
-  </nav>
+<body data-page="panel" data-crumb="Panel">
+<div class="grid-lines"></div>
+<div class="overlay-backdrop" data-backdrop></div>
+<div class="shell">
+  <aside class="sidebar" data-sidebar></aside>
+  <div class="main">
+    <header class="topbar" data-topbar></header>
+    <main class="content">
+      <div class="banner error" id="loadError" hidden></div>
 
-  <h1>TikTok LIVE radarı,<br /><span>sen girmesen de açık.</span></h1>
-  <p class="lead">
-    GitHub Actions her <b>5 dakikada</b> bir yayıncıları ve sandıkları tarar, sonucu bu sayfaya yazar.
-    Panel, veritabanı veya oturum gerekmez. Windows uygulaması aynı veriyi <b>5 saniyede</b> bir çeker,
-    sandık açılmadan önce masaüstü bildirimi gönderir.
-  </p>
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Genel bakış · Canlı merkez</p>
+          <h1>Yayın merkezi</h1>
+          <p class="lead">Ajans kadron, canlı yayın metrikleri, sandık radarı ve otomasyonların tek ekranda. Tüm veriler gerçek TikTok uygulama ve Webcast bağlantısından gelir.</p>
+        </div>
+        <div class="head-actions">
+          <a class="btn primary" href="sandik.html">◎ Sandık radarını · Yayın ağı</a>
+          <a class="btn" href="yayinlar.html#studio">▷ Canlı stüdyo</a>
+        </div>
+      </div>
 
-  <div class="status">
-    <span class="pill"><i class="dot" id="dot"></i><span id="source">GitHub Radar</span></span>
-    <span id="fresh">veri yükleniyor…</span>
-    <span id="extra"></span>
+      <section class="discovery" aria-labelledby="discoveryTitle">
+          <div class="discovery-copy">
+            <p class="kicker">◈ Keşif merkezi</p>
+            <h2 id="discoveryTitle">Canlı yayın ağı</h2>
+            <p>Ülke etiketleri, doğrulanan odalar ve yaklaşan sandıklar.</p>
+            <div class="discovery-metrics">
+              <div><strong id="netChecked">—</strong><span>Doğrulanmış oda</span></div>
+              <div><strong id="netLive">—</strong><span>Canlı oda</span></div>
+              <div><strong id="netChests">—</strong><span>Sandık</span></div>
+            </div>
+            <a class="discovery-link" href="sandik.html">Sandık radarını aç ↗</a>
+          </div>
+          <div class="map-wrap">
+            <svg id="worldMap" viewBox="0 0 360 160" role="img" aria-label="Doğrulanan odaların kaynak bölgeleri"></svg>
+            <p class="map-caption"><i class="dot"></i><span id="mapCaption">kaynak bölgesi · örneklem</span></p>
+          </div>
+      </section>
+
+      <div class="hero-grid">
+          <section class="card studio" aria-labelledby="studioTitle">
+            <div class="studio-inner">
+              <div class="studio-copy">
+                <div class="studio-badges">
+                  <span class="chip">Yayın yok</span>
+                  <span class="chip mint">Demo motoru hazır</span>
+                  <span class="chip">Demo</span>
+                </div>
+                <h2 id="studioTitle">TikTok LIVE stüdyosunu başlat</h2>
+                <p>Yayında olan bir yayıncı gir; sistem gerçek TikTok durumunu doğrular ve Webcast bağlantısı kurar.</p>
+                <div class="studio-actions">
+                  <a class="btn primary" href="yayinlar.html#studio">▶ Yayını başlat</a>
+                  <a class="btn ghost" href="yardim.html#otomasyon">⚙ Otomasyonlar</a>
+                  <a class="btn ghost" href="overlay.html" target="_blank" rel="noreferrer">▤ Overlay al</a>
+                </div>
+              </div>
+              <div class="session-target">
+                <p class="label">Oturum hedefi</p>
+                <p class="value" id="goalValue">0 <small>/25K</small></p>
+                <div class="progress"><i id="goalBar"></i></div>
+                <div class="session-mini">
+                  <div><span>Bağlı</span><strong>0</strong></div>
+                  <div><span>Tarifi</span><strong id="giftCount">+0</strong></div>
+                </div>
+                <div class="bars" id="bars" aria-hidden="true"></div>
+                <p class="bars-caption">Son 10 saat · olay akışı</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="card quick">
+            <div class="qr-box"><img src="assets/qr-panel.svg" alt="Panel bağlantısı QR kodu" width="92" height="92" /></div>
+            <div>
+              <h3>Mobil stüdyo</h3>
+              <p>Telefonla QR'ı okut, panelin canlı ekranına bağlan. Overlay URL'lerini OBS'e ekle.</p>
+              <div class="chips">
+                <span class="chip">OBS</span>
+                <span class="chip">GitHub Pages</span>
+                <span class="chip">Zero-dep</span>
+              </div>
+              <a class="link" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows paketini indir ↗</a>
+            </div>
+          </section>
+      </div>
+
+      <div class="kpi-grid">
+        <a class="kpi amber" href="sandik.html">
+          <div class="kpi-top"><span class="kpi-label">Sandık radarı</span><span class="kpi-icon">▣</span></div>
+          <strong id="kpiChests">—</strong>
+          <small id="kpiChestsMeta">0 açık bekliyor · 0 jeton</small>
+          <span class="cta">Radara git →</span>
+        </a>
+        <a class="kpi cyan" href="yayinlar.html">
+          <div class="kpi-top"><span class="kpi-label">Yayıncı kadrosu</span><span class="kpi-icon">◉</span></div>
+          <strong id="kpiLive">—</strong>
+          <small id="kpiLiveMeta">doğrulanmış canlı yayın</small>
+          <span class="cta" id="kpiLiveCta">Canlıyı aç →</span>
+        </a>
+        <a class="kpi pink" href="sandik.html?tab=all">
+          <div class="kpi-top"><span class="kpi-label">Elmas havuzu</span><span class="kpi-icon">◆</span></div>
+          <strong id="kpiDiamonds">0</strong>
+          <small id="kpiDiamondsMeta">canlı yayın jeton akışı</small>
+          <span class="cta">Akışı gör →</span>
+        </a>
+        <a class="kpi violet" href="yardim.html#otomasyon">
+          <div class="kpi-top"><span class="kpi-label">Açık fırsatlar</span><span class="kpi-icon">◇</span></div>
+          <strong id="kpiOpps">—</strong>
+          <small id="kpiOppsMeta">doğrulanan aday</small>
+          <span class="cta">Otomasyon →</span>
+        </a>
+      </div>
+
+      <div class="section-grid">
+        <section class="card">
+          <div class="card-head">
+            <div><h3>Sandık fırsatları</h3><p>Oran = jeton ÷ kontenjan · açılış süresi canlı</p></div>
+            <a class="chip mint" href="sandik.html">Tümü ↗</a>
+          </div>
+          <div class="list" id="chestList"><div class="empty"><strong>Tarama verisi yükleniyor</strong>GitHub Radar ilk turunu tamamladığında sandıklar burada listelenir.</div></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div><h3>Canlı yayınlar</h3><p>check_alive ile doğrulanmış odalar</p></div>
+            <span class="chip live"><i class="dot" style="width:5px;height:5px"></i>LIVE</span>
+          </div>
+          <div class="list" id="streamList"><div class="empty"><strong>Henüz doğrulanmış yayın yok</strong>Bir sonraki tarama birkaç dakika içinde çalışır.</div></div>
+          <div style="padding:0 14px 12px"><a class="btn sm" href="yayinlar.html" style="width:100%">Tüm canlı yayınlar</a></div>
+        </section>
+      </div>
+
+      <div class="section-grid" style="grid-template-columns:1fr">
+        <section class="card">
+          <div class="card-head">
+            <div><h3>Otomatik tarama durumu</h3><p>GitHub Actions · cron */5 · bilgisayar kapalıyken de çalışır</p></div>
+            <span class="chip" id="scanChip">bekleniyor</span>
+          </div>
+          <div class="card-pad">
+            <div class="discovery-metrics" style="margin-top:0">
+              <div><strong id="scanChecked">—</strong><span>Aday doğrulandı</span></div>
+              <div><strong id="scanLive">—</strong><span>Canlı oda</span></div>
+              <div><strong id="scanSeconds">—</strong><span>Tarama süresi</span></div>
+              <div><strong id="scanErrors">—</strong><span>Kaynak uyarısı</span></div>
+              <div><strong id="scanFresh">—</strong><span>Veri yaşı</span></div>
+            </div>
+            <p class="lead" style="margin-top:14px;font-size:11px">
+              Akış: aday yayıncılar → <b>user/room + check_alive</b> → <b>room/info</b> sandık zarfı → <code>web/data/arena-live.json</code> → GitHub Pages ve Windows Radar.
+              Windows uygulaması ayrıca kendi IP'sinden yerel keşif turu çalıştırır; iki kaynak birleştirilir.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <footer class="site">
+        <span>Arena Live OS · MIT · TikTok ile resmi bağlantısı yoktur. Yalnızca kamuya açık yayın verisi okunur.</span>
+        <span><a href="yardim.html">Yardım</a> · <a href="sandik.html">Sandık radarı</a> · <a href="https://github.com/CehennemGibiyim/ArenaSag">GitHub</a></span>
+      </footer>
+    </main>
   </div>
-
-  <div class="stats">
-    <div class="stat"><b id="sChests">—</b><span>Sandık</span></div>
-    <div class="stat"><b id="sStreams">—</b><span>Canlı yayın</span></div>
-    <div class="stat"><b id="sBest">—</b><span>En iyi oran</span></div>
-    <div class="stat"><b id="sSoon">—</b><span>En yakın açılış</span></div>
-  </div>
-  <div class="err" id="err"></div>
-
-  <section>
-    <div class="head">
-      <div>
-        <h2>Öne çıkan sandıklar</h2>
-        <p>Oran = jeton ÷ kontenjan. Yüksek oran, kişi başı daha çok jeton demek.</p>
-      </div>
-      <a href="sandik.html">Tüm sandıklar →</a>
-    </div>
-    <div class="grid" id="chestGrid"><div class="empty"><b>Tarama verisi yükleniyor</b>GitHub Radar ilk turunu tamamladığında sandıklar burada listelenir.</div></div>
-  </section>
-
-  <section>
-    <div class="head">
-      <div>
-        <h2>Canlı yayınlar</h2>
-        <p>Canlılık TikTok check_alive ile doğrulanır; tahmin edilmez.</p>
-      </div>
-      <a href="sandik.html">Radarı aç →</a>
-    </div>
-    <div id="streamList"><div class="empty">Henüz doğrulanmış canlı yayın yok.</div></div>
-  </section>
-
-  <section class="cols">
-    <div class="panel">
-      <h3>Windows kurulumu</h3>
-      <p>Kurulum paketi GitHub'da üretilir. Açılışta yeni sürümü denetler, veriyi GitHub'dan çeker ve arka planda çalışır.</p>
-      <div class="steps">
-        <div class="step"><div><b>İndir</b><span>ArenaRadar-Setup.exe — imzalı olmayan açık kaynak kurulum.</span></div></div>
-        <div class="step"><div><b>Kur ve aç</b><span>Masaüstü ve başlangıç kısayolu oluşur; yönetici gerekmez.</span></div></div>
-        <div class="step"><div><b>Bildirimi aç</b><span>Yüksek oranlı sandık açılmadan önce uyarı gelir.</span></div></div>
-      </div>
-      <div class="btnrow">
-        <a class="btn" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows kurulum paketi</a>
-        <a class="btn ghost" href="https://github.com/CehennemGibiyim/ArenaSag/releases" target="_blank" rel="noreferrer">Sürümler</a>
-      </div>
-      <div class="note">Otomatik jeton toplama TikTok tarafından sunulmaz. Uygulama sandığı süresi dolmadan gösterir ve canlıya tek tıkla götürür.</div>
-    </div>
-
-    <div class="panel">
-      <h3>Sürekli tarama nasıl çalışır?</h3>
-      <p>Tarama GitHub sunucularında döner; bilgisayarın kapalı olsa bile yeni yayıncılar ve sandıklar bulunur.</p>
-      <pre>GitHub Actions · cron */5
-  → aday yayıncılar (Tik.Tools, TikWM, dizin)
-  → user/room + check_alive doğrulama
-  → room/info → sandık zarfı
-  → web/data/arena-live.json
-  → GitHub Pages + Windows Radar</pre>
-      <p style="margin-top:10px">Veri akışı: <code>web/data/arena-live.json</code>. Windows uygulaması ham GitHub adresini 5 saniyede bir sorgular, değişiklik yoksa bant genişliği harcamaz.</p>
-    </div>
-  </section>
-
-  <section>
-    <div class="head">
-      <div>
-        <h2>Overlay kütüphanesi</h2>
-        <p>OBS browser source için hazır widget'lar. Panel API'sine bağlanır.</p>
-      </div>
-      <a href="overlay.html" target="_blank" rel="noreferrer">Overlay'i aç ↗</a>
-    </div>
-    <div class="panel">
-      <pre>&lt;script src="arena-widget.js"&gt;&lt;/script&gt;
-&lt;div data-arena="goal" data-username="elif_live" data-goal="5000"&gt;&lt;/div&gt;
-&lt;div data-arena="top-gifters" data-username="elif_live" data-rows="5"&gt;&lt;/div&gt;
-&lt;div data-arena="chat" data-username="elif_live" data-rows="8"&gt;&lt;/div&gt;</pre>
-    </div>
-  </section>
-
-  <footer>
-    Arena Radar · MIT lisansı · TikTok ile resmi bağlantısı yoktur. Yalnızca kamuya açık yayın verisi okunur.<br />
-    <a href="sandik.html">Sandık radarı</a> · <a href="https://github.com/CehennemGibiyim/ArenaSag">Kaynak kodu</a> ·
-    <a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows kurulum</a>
-  </footer>
 </div>
 
 <script src="arena-data.js"></script>
+<script src="panel.js"></script>
 <script>
+(function () {
   var D = window.ArenaData;
+  var mapLoaded = false;
+  var mapShapes = null;
 
-  function timerColor(seconds) {
+  function el(id) { return document.getElementById(id); }
+  function num(value) { return D.formatNumber(value || 0); }
+  function color(seconds) {
     if (seconds <= 0) return "#ff3b5c";
     if (seconds <= 30) return "#ffa62b";
     return "#2ee6a8";
   }
 
-  function chestCard(chest) {
-    var left = D.secondsLeft(chest);
-    var card = document.createElement("div");
-    card.className = "card" + (left <= 0 ? " open" : "") + (chest.variant === "gold" ? " gold" : "");
-    card.innerHTML =
-      '<div class="row"><div style="min-width:0"><div class="who">@' + D.escapeHtml(chest.username) + '</div>' +
-      '<div class="sub">' + D.escapeHtml(chest.title || chest.variant) + '</div></div>' +
-      '<div class="timer" style="color:' + timerColor(left) + '">' + (left > 0 ? D.clock(left) : "AÇIK") + '</div></div>' +
-      '<div class="metrics"><div class="m"><b>' + D.formatNumber(chest.coins) + '</b><span>Jeton</span></div>' +
-      '<div class="m"><b style="color:#9df9f5">' + D.ratioOf(chest) + '</b><span>Oran</span></div>' +
-      '<div class="m"><b>' + D.formatNumber(chest.slots) + '</b><span>Kontenjan</span></div></div>' +
-      '<a class="open-live" target="_blank" rel="noreferrer" href="' + D.escapeHtml(chest.openUrl || D.liveUrl(chest.username)) + '">Canlıya gir</a>';
-    return card;
-  }
-
-  function render(data) {
-    var chests = data.chests || [];
-    var streams = data.streams || [];
-    var best = chests.reduce(function (max, chest) { return Math.max(max, D.ratioOf(chest)); }, 0);
-    var soon = chests.reduce(function (min, chest) {
-      var left = D.secondsLeft(chest);
-      return left > 0 && left < min ? left : min;
-    }, Infinity);
-    document.getElementById("sChests").textContent = D.formatNumber(chests.length);
-    document.getElementById("sStreams").textContent = D.formatNumber(streams.length);
-    document.getElementById("sBest").textContent = best ? best + "×" : "—";
-    document.getElementById("sSoon").textContent = Number.isFinite(soon) ? D.clock(soon) : "—";
-
-    var grid = document.getElementById("chestGrid");
-    grid.innerHTML = "";
-    var top = D.sortChests(chests, "ratio", true).slice(0, 3);
-    if (!top.length) {
-      grid.innerHTML = '<div class="empty"><b>Henüz sandık yok</b>Son tarama sandık bulamadı; bir sonraki tur birkaç dakika içinde çalışır.</div>';
-    } else {
-      top.forEach(function (chest) { grid.appendChild(chestCard(chest)); });
-    }
-
-    var list = document.getElementById("streamList");
-    list.innerHTML = "";
-    if (!streams.length) {
-      list.innerHTML = '<div class="empty">Henüz doğrulanmış canlı yayın yok.</div>';
-    }
-    streams.slice(0, 6).forEach(function (stream) {
-      var row = document.createElement("div");
-      row.className = "stream";
-      row.innerHTML =
-        '<div style="min-width:0"><div class="who">@' + D.escapeHtml(stream.username) + ' <span class="live-tag">CANLI</span></div>' +
-        '<div class="sub">' + D.escapeHtml(stream.title || "yayın") + ' · ' + D.formatNumber(stream.viewers) + ' izleyici</div></div>' +
-        '<a target="_blank" rel="noreferrer" href="' + D.escapeHtml(stream.openUrl || D.liveUrl(stream.username)) + '">Aç ↗</a>';
-      list.appendChild(row);
+  function paintBars() {
+    var bars = el("bars");
+    if (!bars || bars.childElementCount) return;
+    var heights = [30, 42, 36, 55, 48, 66, 58, 78, 72, 92, 84, 100, 76, 90];
+    heights.forEach(function (h) {
+      var bar = document.createElement("i");
+      bar.style.height = h + "%";
+      bars.appendChild(bar);
     });
   }
 
-  function status(data, source) {
-    var scanned = D.ageSeconds(data);
-    var dot = document.getElementById("dot");
-    dot.className = "dot" + (scanned != null && scanned > 900 ? " warn" : "");
-    document.getElementById("source").textContent = "GitHub Radar" + (source && source.indexOf("raw.githubusercontent") >= 0 ? " · ham veri" : "");
-    document.getElementById("fresh").textContent =
-      data && data.generatedAt
-        ? "veri " + (scanned < 90 ? scanned + " sn" : Math.round(scanned / 60) + " dk") + " önce güncellendi · " + new Date(data.generatedAt).toLocaleTimeString("tr-TR")
-        : "ilk tarama bekleniyor…";
-    var extra = document.getElementById("extra");
-    if (data && data.stats) {
-      extra.textContent = "· " + D.formatNumber(data.stats.checked || 0) + " aday doğrulandı" +
-        (data.scanSeconds ? " · tarama " + data.scanSeconds + " sn" : "");
-    }
+  function chestRow(chest) {
+    var left = D.secondsLeft(chest);
+    var row = document.createElement("a");
+    row.className = "list-row";
+    row.href = chest.openUrl || D.liveUrl(chest.username);
+    row.target = "_blank";
+    row.rel = "noreferrer";
+    row.innerHTML =
+      '<span class="avatar">' + D.escapeHtml((chest.username || "?").slice(0, 2).toUpperCase()) + '</span>' +
+      '<span class="list-main"><strong>@' + D.escapeHtml(chest.username) + '</strong><span>' +
+      D.escapeHtml(chest.title || chest.variant || "sandık") + ' · ' + num(chest.coins) + ' jeton / ' + num(chest.slots) + ' kişi</span></span>' +
+      '<span class="list-right"><b style="color:' + color(left) + '">' + (left > 0 ? D.clock(left) : "AÇIK") + '</b><small>' + D.ratioOf(chest) + '× oran</small></span>';
+    return row;
   }
 
-  async function load() {
-    try {
-      var result = await D.loadSnapshot();
-      document.getElementById("err").textContent = "";
-      status(result.data, result.source);
-      render(result.data);
-      window.__arenaSnapshot = result.data;
-    } catch (error) {
-      document.getElementById("err").textContent = "Veri alınamadı: " + (error && error.message ? error.message : "bilinmeyen hata");
-    }
+  function streamRow(stream) {
+    var row = document.createElement("a");
+    row.className = "list-row";
+    row.href = stream.openUrl || D.liveUrl(stream.username);
+    row.target = "_blank";
+    row.rel = "noreferrer";
+    row.innerHTML =
+      '<span class="avatar">' + D.escapeHtml((stream.nickname || stream.username || "?").slice(0, 2).toUpperCase()) + '</span>' +
+      '<span class="list-main"><strong>@' + D.escapeHtml(stream.username) + '</strong><span>' + D.escapeHtml(stream.title || "yayın") + '</span></span>' +
+      '<span class="list-right"><b>' + num(stream.viewers) + '</b><small>izleyici</small></span>';
+    return row;
   }
 
-  load();
-  setInterval(load, 10000);
-  setInterval(function () {
-    if (!window.__arenaSnapshot) return;
-    var chests = window.__arenaSnapshot.chests || [];
-    var soon = chests.reduce(function (min, chest) {
-      var left = D.secondsLeft(chest);
-      return left > 0 && left < min ? left : min;
-    }, Infinity);
-    document.getElementById("sSoon").textContent = Number.isFinite(soon) ? D.clock(soon) : "—";
-  }, 1000);
+  function renderMap(regions) {
+    var svg = el("worldMap");
+    if (!svg || !mapShapes) return;
+    var active = {};
+    (regions || []).forEach(function (region) { if (region && region.code) active[region.code] = true; });
+    var html = '<defs><pattern id="arena-map-dots" x="0" y="0" width="3" height="3" patternUnits="userSpaceOnUse">' +
+      '<circle cx="1.5" cy="1.5" r=".72" fill="#667f73"/></pattern></defs>';
+    mapShapes.forEach(function (shape) {
+      html += '<path d="' + shape.d + '" fill="' + (active[shape.code] ? "#335d4d" : "url(#arena-map-dots)") + '"></path>';
+    });
+    mapShapes.filter(function (shape) { return active[shape.code]; }).forEach(function (shape) {
+      html += '<g><title>' + shape.code + '</title><circle cx="' + shape.x + '" cy="' + shape.y + '" r="4" fill="#a6f3c9" opacity=".16"/><circle cx="' + shape.x + '" cy="' + shape.y + '" r="1.4" fill="#b0fad1"/></g>';
+    });
+    svg.innerHTML = html;
+    el("mapCaption").textContent = Object.keys(active).length + " kaynak bölgesi · örneklem";
+  }
+
+  function initMap() {
+    if (mapLoaded) return;
+    mapLoaded = true;
+    fetch("radar-geography.json")
+      .then(function (response) { return response.json(); })
+      .then(function (shapes) {
+        mapShapes = shapes;
+        renderMap((window.ArenaPanel.state.snapshot || {}).regions || []);
+      })
+      .catch(function () { el("mapCaption").textContent = "harita verisi alınamadı"; });
+  }
+
+  function render(data) {
+    var streams = data.streams || [];
+    var chests = data.chests || [];
+    var stats = data.stats || {};
+    var live = streams.length || stats.live || 0;
+    var coins = chests.reduce(function (sum, chest) { return sum + Number(chest.coins || 0); }, 0);
+    var diamonds = streams.reduce(function (sum, stream) { return sum + Number(stream.diamondsPerMin || 0); }, 0);
+
+    el("netChecked").textContent = num(stats.checked || streams.length);
+    el("netLive").textContent = num(live);
+    el("netChests").textContent = num(chests.length);
+
+    el("kpiChests").textContent = num(chests.length);
+    el("kpiChestsMeta").textContent = num(chests.length) + " açık bekliyor · " + num(coins) + " jeton";
+    el("kpiLive").textContent = num(live);
+    el("kpiLiveMeta").textContent = "doğrulanmış canlı yayın";
+    el("kpiLiveCta").textContent = live ? live + " oda canlı →" : "Henüz canlı oda yok";
+    el("kpiDiamonds").textContent = diamonds ? num(diamonds) : "0";
+    el("kpiDiamondsMeta").textContent = diamonds ? "izleyici başına jeton/dk" : "canlı yayın jeton akışı";
+    el("kpiOpps").textContent = num(stats.candidates || stats.checked || 0);
+    el("kpiOppsMeta").textContent = num(stats.checked || 0) + " aday doğrulandı";
+
+    el("scanChecked").textContent = num(stats.checked || 0);
+    el("scanLive").textContent = num(stats.live || live);
+    el("scanSeconds").textContent = data.scanSeconds ? data.scanSeconds + " sn" : "—";
+    el("scanErrors").textContent = (data.errors || []).length;
+    el("scanFresh").textContent = D.ageSeconds(data) < 90 ? D.ageSeconds(data) + " sn" : Math.round(D.ageSeconds(data) / 60) + " dk";
+    var scanChip = el("scanChip");
+    var stale = D.ageSeconds(data) > 900;
+    scanChip.textContent = stale ? "gecikti" : "aktif · " + new Date(data.generatedAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+    scanChip.className = "chip" + (stale ? "" : " mint");
+
+    var chestList = el("chestList");
+    chestList.innerHTML = "";
+    var topChests = D.sortChests(chests, "ratio", true).slice(0, 4);
+    if (!topChests.length) {
+      chestList.innerHTML = '<div class="empty"><strong>Henüz sandık yok</strong>Son tarama sandık bulamadı; bir sonraki tur birkaç dakika içinde çalışır. Sandıklar yalnızca gerçek yayın zarfından gelir.</div>';
+    } else {
+      topChests.forEach(function (chest) { chestList.appendChild(chestRow(chest)); });
+    }
+
+    var streamList = el("streamList");
+    streamList.innerHTML = "";
+    var topStreams = streams.slice().sort(function (a, b) { return Number(b.viewers || 0) - Number(a.viewers || 0); }).slice(0, 5);
+    if (!topStreams.length) {
+      streamList.innerHTML = '<div class="empty"><strong>Henüz canlı yayın yok</strong>Doğrulama TikTok check_alive üzerinden yapılır.</div>';
+    } else {
+      topStreams.forEach(function (stream) { streamList.appendChild(streamRow(stream)); });
+    }
+
+    el("loadError").hidden = true;
+    renderMap(data.regions || []);
+    paintBars();
+    window.__arenaSnapshot = data;
+  }
+
+  window.PanelPage = {
+    render: function (data) {
+      initMap();
+      render(data);
+    },
+    tick: function (data) {
+      var oldest = 0;
+      (data.chests || []).forEach(function (chest) {
+        var left = D.secondsLeft(chest);
+        if (left <= 0) oldest = 1;
+      });
+      if ((data.chests || []).length) {
+        var list = el("chestList");
+        var rows = list.querySelectorAll(".list-right b");
+        var chests = D.sortChests(data.chests, "ratio", true).slice(0, 4);
+        chests.forEach(function (chest, index) {
+          if (!rows[index]) return;
+          var left = D.secondsLeft(chest);
+          rows[index].textContent = left > 0 ? D.clock(left) : "AÇIK";
+          rows[index].style.color = color(left);
+        });
+      }
+      el("scanFresh").textContent = D.ageSeconds(data) < 90 ? D.ageSeconds(data) + " sn" : Math.round(D.ageSeconds(data) / 60) + " dk";
+    },
+    search: function (query) {
+      window.location.href = "sandik.html?q=" + encodeURIComponent(query);
+    },
+    error: function (message) {
+      var banner = el("loadError");
+      banner.hidden = false;
+      banner.textContent = "Veri alınamadı: " + message + " · GitHub Radar ilk turunu tamamladığında sayfa kendini yeniler.";
+    },
+  };
+})();
 </script>
 </body>
 </html>

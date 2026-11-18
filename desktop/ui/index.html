@@ -89,6 +89,7 @@
     <span class="pill"><i class="dot" id="dot"></i><span id="stateText">bağlanıyor…</span></span>
     <span id="fresh">veri yükleniyor…</span>
     <span class="pill" id="soundPill" title="Uyarı sesi">🔔 ses açık</span>
+    <span class="pill" id="discoveryPill" title="Yerel keşif turu">⟳ keşif —</span>
   </div>
   <div id="banners"></div>
 
@@ -113,6 +114,7 @@
     </select>
     <button id="dir">↓</button>
     <button id="refresh">↻</button>
+    <button id="discover" title="Kendi IP'nden keşif turunu hemen başlat">Yerel tara</button>
   </div>
   <div class="err" id="err"></div>
   <div class="grid" id="grid"></div>
@@ -124,7 +126,7 @@
   <div class="alerts" id="alerts"><div class="alert">Henüz uyarı yok. Yüksek oranlı sandık açılmadan önce burada ve Windows bildiriminde görünür.</div></div>
 
   <footer>
-    Veri GitHub Actions taramasından gelir (yaklaşık 5 dakikada bir). Uygulama açılışta ve çalışırken GitHub sürümünü denetler.<br />
+    Veri GitHub Actions taramasından (yaklaşık 5 dakikada bir) ve uygulamanın kendi IP'sinden çalışan yerel keşif turundan gelir. Uygulama açılışta ve çalışırken GitHub sürümünü denetler.<br />
     Otomatik jeton toplama TikTok tarafından sunulmaz; bu uygulama sandığı zamanında gösterip canlıya tek tıkla götürür.
     <a href="#" id="repoLink">GitHub deposu</a>
   </footer>
@@ -139,6 +141,9 @@
     <div class="field"><span>Uyarı penceresi (sn)</span><input type="number" id="alertSeconds" min="30" max="1800" step="10" /></div>
     <div class="field"><span>Yerel oda taraması (sn)</span><input type="number" id="roomScanSeconds" min="10" max="300" step="5" /></div>
     <div class="field"><span>Taranacak canlı oda</span><input type="number" id="roomScanLimit" min="1" max="20" /></div>
+    <div class="field"><span>Yerel keşif turu (dk)</span><input type="number" id="discoverMinutes" min="2" max="60" step="1" /></div>
+    <div class="field"><span>Keşifte doğrulanacak aday</span><input type="number" id="discoverChecks" min="20" max="120" step="10" /></div>
+    <div class="field"><span>Keşifte taranacak oda</span><input type="number" id="discoverRooms" min="10" max="60" step="5" /></div>
     <div class="field"><label><input type="checkbox" id="notifyDesktop" /> Windows bildirimi</label></div>
     <div class="field"><label><input type="checkbox" id="sound" /> Uyarı sesi</label></div>
     <div class="field"><label><input type="checkbox" id="autoUpdate" /> Güncellemeyi otomatik indir</label></div>
@@ -365,6 +370,15 @@
     }
 
     document.getElementById("versionBtn").textContent = "v" + (data.app ? data.app.version : "—");
+    var discoveryPill = document.getElementById("discoveryPill");
+    var discovery = data.discovery || {};
+    if (discovery.running) discoveryPill.textContent = "⟳ keşif çalışıyor…";
+    else if (discovery.error) discoveryPill.textContent = "⟳ keşif hatası";
+    else if (discovery.lastLocalAt) {
+      var minutesAgo = Math.max(0, Math.round((Date.now() - Date.parse(discovery.lastLocalAt)) / 60000));
+      discoveryPill.textContent = "⟳ keşif " + minutesAgo + " dk önce · " + (discovery.localStreams || 0) + " oda";
+    } else discoveryPill.textContent = "⟳ keşif bekliyor";
+    discoveryPill.title = discovery.error ? discovery.error : "Yerel keşif turu kendi IP'nden aday yayıncıları tarar";
 
     if (data.alerts && data.alerts.length > state.alertCount && state.alertCount > 0) {
       if (data.config && data.config.sound) beep();
@@ -431,6 +445,9 @@
       alertSeconds: Number(document.getElementById("alertSeconds").value),
       roomScanSeconds: Number(document.getElementById("roomScanSeconds").value),
       roomScanLimit: Number(document.getElementById("roomScanLimit").value),
+      discoverMinutes: Number(document.getElementById("discoverMinutes").value),
+      discoverChecks: Number(document.getElementById("discoverChecks").value),
+      discoverRooms: Number(document.getElementById("discoverRooms").value),
       notifyDesktop: document.getElementById("notifyDesktop").checked,
       sound: document.getElementById("sound").checked,
       autoUpdate: document.getElementById("autoUpdate").checked,
@@ -449,6 +466,14 @@
   };
   document.getElementById("refresh").onclick = function () {
     fetch("/api/refresh", { method: "POST" }).then(refresh);
+  };
+  document.getElementById("discover").onclick = function () {
+    var button = this;
+    button.disabled = true;
+    button.textContent = "Taranıyor…";
+    fetch("/api/discover", { method: "POST" })
+      .then(function () { return refresh(); })
+      .finally(function () { button.disabled = false; button.textContent = "Yerel tara"; });
   };
   document.getElementById("openWeb").onclick = function () {
     fetch("/api/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: "https://cehennemgibiyim.github.io/ArenaSag/sandik.html" }) });

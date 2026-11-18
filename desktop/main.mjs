@@ -34,6 +34,8 @@ const STATE_DIR =
   (IS_WIN
     ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "ArenaRadar")
     : path.join(os.homedir(), ".arena-radar"));
+const SCANNER = path.join(ROOT, "scripts", "radar-publish.mjs");
+const DISCOVERY_DIR = path.join(STATE_DIR, "data");
 const CONFIG_FILE = path.join(STATE_DIR, "config.json");
 const ALERTED_FILE = path.join(STATE_DIR, "alerted.json");
 const LOG_FILE = path.join(STATE_DIR, "radar.log");
@@ -52,6 +54,9 @@ const DEFAULTS = {
   alertSeconds: 180,
   roomScanSeconds: 20,
   roomScanLimit: 8,
+  discoverMinutes: 5,
+  discoverChecks: 60,
+  discoverRooms: 25,
   notifyDesktop: true,
   sound: true,
   autoUpdate: true,
@@ -123,12 +128,24 @@ function compareVersions(a, b) {
 
 const config = loadConfig();
 let snapshot = null;
+let remoteSnapshot = null;
+let localSnapshot = null;
 let source = "";
 let lastFetchAt = 0;
 let lastError = "";
 let alerts = [];
 const localChests = new Map();
 let roomScanTimer;
+let discoveryTimer;
+let discovery = {
+  running: false,
+  lastRunAt: null,
+  lastLocalAt: null,
+  nextAt: null,
+  streams: 0,
+  chests: 0,
+  error: null,
+};
 let alerted = loadAlerted();
 let seeded = alerted.size > 0;
 let pollTimer;
@@ -260,6 +277,133 @@ function raiseAlert(chest) {
   notifyDesktop(title, message);
 }
 
+/** GitHub taraması ile yerel keşif turunu tek görünümde birleştirir. */
+function mergeSnapshots(remote, local) {
+  const timeOf = (value) => (value && value.generatedAt ? Date.parse(value.generatedAt) || 0 : 0);
+  const base = timeOf(local) > timeOf(remote) ? local : remote;
+  if (!base) return null;
+
+  const streams = new Map();
+  for (const item of [...((remote && remote.streams) || []), ...((local && local.streams) || [])]) {
+    if (item && item.username) streams.set(item.username, item);
+  }
+  const chests = new Map();
+  for (const item of [...((remote && remote.chests) || []), ...((local && local.chests) || [])]) {
+    if (item && item.envelopeId) chests.set(item.envelopeId, item);
+  }
+  for (const [id, chest] of localChests) chests.set(id, chest);
+
+  const now = Date.now();
+  const chestList = [...chests.values()].filter((chest) => {
+    const opens = Date.parse((chest && chest.opensAt) || "");
+    return Number.isFinite(opens) && opens > now - 10 * 60_000;
+  });
+
+  return {
+    ...base,
+    source: base === local ? "local-discovery" : base.source,
+    streams: [...streams.values()],
+    chests: chestList,
+    stats: {
+      ...(base.stats || {}),
+      candidates: Math.max(Number(remote?.stats?.candidates) || 0, Number(local?.stats?.candidates) || 0),
+      live: streams.size,
+      chests: chestList.length,
+    },
+  };
+}
+
+function applySnapshots() {
+  snapshot = mergeSnapshots(remoteSnapshot, localSnapshot);
+}
+
+/** Paketteki tarayıcıyı kendi IP'mizden çalıştırır; GitHub cron'unu beklemez. */
+async function runDiscovery() {
+  if (discovery.running) return;
+  if (!fs.existsSync(SCANNER)) {
+    discovery = { ...discovery, running: false, error: "Tarayıcı betiği pakette bulunamadı." };
+    return;
+  }
+  discovery = { ...discovery, running: true, lastRunAt: new Date().toISOString(), error: null };
+  log("yerel keşif turu başladı");
+  try {
+    await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
+    const outFile = path.join(DISCOVERY_DIR, "arena-live.json");
+    const checks = Math.max(20, Math.min(120, Number(config.discoverChecks) || 60));
+    const rooms = Math.max(10, Math.min(60, Number(config.discoverRooms) || 25));
+    await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [SCANNER], {
+        cwd: ROOT,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          ARENA_OUT_DIR: DISCOVERY_DIR,
+          ARENA_MAX_CHECKS: String(checks),
+          ARENA_MAX_ROOMS: String(rooms),
+          ARENA_GITHUB_REPO: config.repo,
+        },
+      });
+      let stdout = "";
+      let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new Error("keşif turu 4 dakikada bitmedi"));
+      }, 240_000);
+      child.stdout.on("data", (chunk) => {
+        stdout = (stdout + chunk.toString()).slice(-4000);
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr = (stderr + chunk.toString()).slice(-2000);
+      });
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve(stdout);
+        else reject(new Error(`tarayıcı çıkış ${code}${stderr ? `: ${stderr.trim().slice(-180)}` : ""}`));
+      });
+    });
+    const data = JSON.parse(await fsp.readFile(path.join(DISCOVERY_DIR, "arena-live.json"), "utf8"));
+    if (!data || data.schema !== 1) throw new Error("yerel veri biçimi geçersiz");
+    localSnapshot = data;
+    applySnapshots();
+    const chests = Array.isArray(data.chests) ? data.chests : [];
+    if (!seeded) {
+      seeded = true;
+      processChests(chests, { seedOnly: true });
+    } else {
+      processChests(chests);
+    }
+    discovery = {
+      ...discovery,
+      running: false,
+      lastLocalAt: data.generatedAt || new Date().toISOString(),
+      streams: (data.streams || []).length,
+      chests: chests.length,
+      error: null,
+    };
+    log(`yerel keşif: ${(data.streams || []).length} canlı yayın · ${chests.length} sandık`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    discovery = { ...discovery, running: false, error: message };
+    log("keşif hatası:", message);
+  }
+}
+
+function scheduleDiscovery(immediate = false) {
+  clearTimeout(discoveryTimer);
+  const minutes = Math.max(2, Math.min(60, Number(config.discoverMinutes) || 5));
+  const delay = immediate ? 1200 : minutes * 60_000;
+  discovery = { ...discovery, nextAt: new Date(Date.now() + delay).toISOString() };
+  discoveryTimer = setTimeout(async () => {
+    await runDiscovery();
+    scheduleDiscovery();
+  }, delay);
+}
+
 async function fetchSnapshot() {
   const urls = Array.isArray(config.dataUrls) && config.dataUrls.length ? config.dataUrls : DEFAULTS.dataUrls;
   let lastFailure = "";
@@ -274,12 +418,13 @@ async function fetchSnapshot() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (!data || data.schema !== 1) throw new Error("Bilinmeyen veri biçimi");
-      const firstLoad = !snapshot;
-      snapshot = data;
+      const firstLoad = !remoteSnapshot;
+      remoteSnapshot = data;
+      applySnapshots();
       source = url;
       lastFetchAt = Date.now();
       lastError = "";
-      const chests = Array.isArray(data.chests) ? data.chests : [];
+      const chests = Array.isArray(snapshot && snapshot.chests) ? snapshot.chests : [];
       if (!seeded) {
         seeded = true;
         processChests(chests, { seedOnly: true });
@@ -500,6 +645,9 @@ function statePayload() {
       alertSeconds: config.alertSeconds,
       roomScanSeconds: config.roomScanSeconds,
       roomScanLimit: config.roomScanLimit,
+      discoverMinutes: config.discoverMinutes,
+      discoverChecks: config.discoverChecks,
+      discoverRooms: config.discoverRooms,
       notifyDesktop: config.notifyDesktop,
       sound: config.sound,
       autoUpdate: config.autoUpdate,
@@ -510,6 +658,13 @@ function statePayload() {
     source,
     lastFetchAt,
     lastError,
+    discovery: {
+      ...discovery,
+      scanner: fs.existsSync(SCANNER),
+      localAt: localSnapshot ? localSnapshot.generatedAt : null,
+      localStreams: localSnapshot ? (localSnapshot.streams || []).length : 0,
+      localChests: localSnapshot ? (localSnapshot.chests || []).length : 0,
+    },
     dataAgeSeconds: Number.isFinite(generated) ? Math.max(0, Math.round((Date.now() - generated) / 1000)) : null,
     alerts: alerts.slice(-10),
     update: updateState,
@@ -557,10 +712,16 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, statePayload());
       return;
     }
+    if (req.method === "POST" && url.pathname === "/api/discover") {
+      void runDiscovery();
+      await sleep(300);
+      json(res, 200, { ok: true, discovery });
+      return;
+    }
     if (req.method === "POST" && url.pathname === "/api/config") {
       const body = await readBody(req);
       const next = { ...config };
-      for (const key of ["pollSeconds", "alertRatio", "alertSeconds", "roomScanSeconds", "roomScanLimit", "port"]) {
+      for (const key of ["pollSeconds", "alertRatio", "alertSeconds", "roomScanSeconds", "roomScanLimit", "discoverMinutes", "discoverChecks", "discoverRooms", "port"]) {
         if (body[key] !== undefined && Number.isFinite(Number(body[key]))) next[key] = Number(body[key]);
       }
       next.pollSeconds = Math.max(3, Math.min(120, next.pollSeconds));
@@ -568,6 +729,9 @@ const server = http.createServer(async (req, res) => {
       next.alertRatio = Math.max(1, Math.min(100, next.alertRatio));
       next.roomScanSeconds = Math.max(10, Math.min(300, next.roomScanSeconds));
       next.roomScanLimit = Math.max(1, Math.min(20, next.roomScanLimit));
+      next.discoverMinutes = Math.max(2, Math.min(60, next.discoverMinutes));
+      next.discoverChecks = Math.max(20, Math.min(120, next.discoverChecks));
+      next.discoverRooms = Math.max(10, Math.min(60, next.discoverRooms));
       for (const key of ["notifyDesktop", "sound", "autoUpdate", "openBrowser"]) {
         if (typeof body[key] === "boolean") next[key] = body[key];
       }
@@ -575,6 +739,7 @@ const server = http.createServer(async (req, res) => {
       saveConfig(config);
       schedulePoll();
       scheduleRoomScan();
+      scheduleDiscovery();
       json(res, 200, statePayload());
       return;
     }
@@ -651,6 +816,7 @@ async function main() {
   schedulePoll();
   void scanRooms();
   scheduleRoomScan();
+  scheduleDiscovery(true);
   void checkRemoteVersion();
   void checkUpdate(true);
   scheduleUpdateChecks();
