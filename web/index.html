@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arena Web Library — TikTok LIVE Overlay Kütüphanesi</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(800px 500px at 10% -10%,rgba(37,244,238,.14),transparent),radial-gradient(700px 500px at 90% 0%,rgba(254,44,85,.16),transparent),#050509;color:#eef0fa;font-family:Inter,'Segoe UI',system-ui,sans-serif;padding:40px 20px}.wrap{max-width:1080px;margin:0 auto}.logo{display:flex;align-items:center;gap:12px;font-weight:900;letter-spacing:.22em;font-size:13px}.mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#25f4ee,#fe2c55);display:grid;place-items:center;color:#05060a;font-weight:900}h1{font-size:clamp(30px,5vw,52px);line-height:1.03;letter-spacing:-.03em;margin:26px 0 12px}h1 span{background:linear-gradient(96deg,#8ffcf8,#b9a7ff 50%,#ff8aa4);-webkit-background-clip:text;background-clip:text;color:transparent}p{color:rgba(238,240,250,.64);line-height:1.65;max-width:680px}.panel{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:18px;padding:18px;margin:18px 0}.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));align-items:start}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}pre{background:#08080f;border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:14px;overflow:auto}.badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border:1px solid rgba(37,244,238,.35);background:rgba(37,244,238,.1);color:#9df9f5;border-radius:99px;padding:4px 10px}.btn{display:inline-block;margin-top:12px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:800;font-size:13px;padding:10px 16px;border-radius:11px;text-decoration:none}footer{margin-top:36px;font-size:11px;color:rgba(238,240,250,.35)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="logo"><span class="mark">A</span> ARENA WEB LIBRARY</div>
+<h1>TikTok LIVE overlay'leri<br /><span>tek satır HTML ile.</span></h1>
+<p>Zero dependency widget seti. Arena Live OS panelinizden gelen canlı elmas, top gifter, sohbet ve hedef verisini GitHub Pages üzerinde yayınlayın. OBS'e browser source olarak ekleyin.</p>
+<div class="panel"><strong style="font-size:13px">Canlı demo</strong><div class="grid" style="margin-top:14px"><div data-arena="goal" data-username="elif_live" data-goal="5000" data-label="Elmas Hedefi"></div><div data-arena="top-gifters" data-username="elif_live" data-rows="4"></div><div data-arena="chat" data-username="elif_live" data-rows="5"></div><div data-arena="stats" data-username="elif_live"></div></div></div>
+<div class="grid"><div class="panel"><span class="badge">Embed</span><pre>&lt;script src="arena-widget.js"&gt;&lt;/script&gt;
+&lt;div data-arena="goal" data-username="elif_live" data-goal="5000"&gt;&lt;/div&gt;</pre></div><div class="panel"><span class="badge">API</span><p style="margin-top:12px;font-size:12px">Paneliniz kapalıysa widget "Bağlantı yok" durumuna düşer. Demo için paneli başlatın:</p><pre>npm run start
+# http://localhost:3000
+# /api/live/feed?username=elif_live</pre></div></div>
+<a class="btn" href="overlay.html" target="_blank">Overlay'i aç ↗</a>
+<a class="btn" href="sandik.html" target="_blank" style="background:rgba(255,255,255,.08);color:#eef0fa;margin-left:8px">Sandık radarı ↗</a>
+<footer>Arena Live OS · MIT · TikTok resmi API'si değildir.</footer>
+</div>
+<script>window.ARENA_API_BASE = window.ARENA_API_BASE || localStorage.getItem("arenaApi") || "http://localhost:3000";</script>
+<script src="arena-widget.js"></script>
+</body>
+</html>
