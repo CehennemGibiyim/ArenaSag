@@ -11,11 +11,14 @@ export default function WindowsPage() {
       <PageHeader
         eyebrow="Dağıtım · Windows"
         title="Windows kurulum paketi"
-        description="Tek zip ile Windows kurulumu: KURULUM.bat, PowerShell sihirbazı, portable başlatıcı ve NSIS installer şablonu. Aynı paket GitHub web kütüphanesi overlay'lerini de içerir."
+        description="GitHub'da üretilen Arena Radar kurulum paketi: panel veya PostgreSQL gerekmez, açılışta sürümü denetler ve GitHub'daki canlı sandık verisini çeker. Tam panel için zip paketi de indirilebilir."
         actions={
           <>
-            <a href="/api/packages/windows" className="btn btn-primary">
-              <MonitorDown size={14} /> Paketi indir
+            <a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe" className="btn btn-primary">
+              <MonitorDown size={14} /> Arena Radar (.exe)
+            </a>
+            <a href="/api/packages/windows" className="btn">
+              <MonitorDown size={14} /> Tam paket (.zip)
             </a>
             <Link href="/kutuphane" className="btn">
               Web kütüphanesi

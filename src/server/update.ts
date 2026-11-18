@@ -15,7 +15,7 @@ export type UpdateStatus = {
   error: string | null;
 };
 
-const repo = () => process.env.ARENA_GITHUB_REPO || "CehennemGibiyim/Arena";
+const repo = () => process.env.ARENA_GITHUB_REPO || "CehennemGibiyim/ArenaSag";
 const cache = globalThis as typeof globalThis & { __arenaUpdateCache?: { at: number; value: UpdateStatus } };
 const TTL_MS = 15 * 60 * 1000;
 

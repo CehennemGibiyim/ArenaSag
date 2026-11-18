@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ["tiktok-live-connector", "qrcode", "jszip"],
   outputFileTracingIncludes: {
-    "/api/windows/pack": ["./scripts/**/*", "./docs/**/*"],
-    "/api/library/pack": ["./scripts/**/*", "./docs/**/*"],
+    "/api/packages/windows": ["./scripts/**/*", "./docs/**/*", "./desktop/**/*", "./web/**/*"],
+    "/api/packages/library": ["./web/**/*", "./public/**/*"],
   },
 };
 

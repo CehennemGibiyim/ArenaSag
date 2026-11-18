@@ -3,26 +3,285 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Arena Web Library — TikTok LIVE Overlay Kütüphanesi</title>
+<meta name="color-scheme" content="dark" />
+<title>Arena Radar — TikTok LIVE sandık ve yayın taraması</title>
+<meta name="description" content="GitHub üzerinde sürekli çalışan TikTok LIVE taraması: canlı yayıncılar, sandıklar, jeton oranı ve Windows bildirim uygulaması." />
 <style>
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(800px 500px at 10% -10%,rgba(37,244,238,.14),transparent),radial-gradient(700px 500px at 90% 0%,rgba(254,44,85,.16),transparent),#050509;color:#eef0fa;font-family:Inter,'Segoe UI',system-ui,sans-serif;padding:40px 20px}.wrap{max-width:1080px;margin:0 auto}.logo{display:flex;align-items:center;gap:12px;font-weight:900;letter-spacing:.22em;font-size:13px}.mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#25f4ee,#fe2c55);display:grid;place-items:center;color:#05060a;font-weight:900}h1{font-size:clamp(30px,5vw,52px);line-height:1.03;letter-spacing:-.03em;margin:26px 0 12px}h1 span{background:linear-gradient(96deg,#8ffcf8,#b9a7ff 50%,#ff8aa4);-webkit-background-clip:text;background-clip:text;color:transparent}p{color:rgba(238,240,250,.64);line-height:1.65;max-width:680px}.panel{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:18px;padding:18px;margin:18px 0}.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));align-items:start}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}pre{background:#08080f;border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:14px;overflow:auto}.badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border:1px solid rgba(37,244,238,.35);background:rgba(37,244,238,.1);color:#9df9f5;border-radius:99px;padding:4px 10px}.btn{display:inline-block;margin-top:12px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:800;font-size:13px;padding:10px 16px;border-radius:11px;text-decoration:none}footer{margin-top:36px;font-size:11px;color:rgba(238,240,250,.35)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 560px at 10% -12%,rgba(37,244,238,.16),transparent),radial-gradient(760px 520px at 92% 0,rgba(254,44,85,.18),transparent),#050509;color:#eef0fa;font-family:Inter,'Segoe UI',system-ui,-apple-system,sans-serif;padding:26px 18px 48px}
+  .wrap{max-width:1120px;margin:0 auto}
+  nav{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:900;letter-spacing:.2em;font-size:12px}
+  .mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#25f4ee,#fe2c55);display:grid;place-items:center;color:#05060a;font-weight:900;letter-spacing:0}
+  .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .navlinks a{color:rgba(238,240,250,.62);font-size:11.5px;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,.09);padding:6px 10px;border-radius:9px;background:rgba(255,255,255,.03)}
+  .navlinks a:hover{color:#fff;border-color:rgba(255,255,255,.22)}
+  .navlinks a.primary{background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;border:0}
+  h1{font-size:clamp(30px,5.4vw,54px);line-height:1.02;letter-spacing:-.035em;margin:34px 0 14px;max-width:900px}
+  h1 span{background:linear-gradient(96deg,#8ffcf8,#b9a7ff 52%,#ff8aa4);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{color:rgba(238,240,250,.62);font-size:13.5px;line-height:1.75;max-width:720px;margin:0}
+  .lead b{color:#eef0fa}
+  .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px;font-size:11px;color:rgba(238,240,250,.45)}
+  .pill{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:99px;padding:5px 10px;font-size:10px;font-weight:800;letter-spacing:.04em}
+  .dot{width:6px;height:6px;border-radius:99px;background:#2ee6a8;box-shadow:0 0 10px #2ee6a8}
+  .dot.warn{background:#ffa62b;box-shadow:0 0 10px #ffa62b}
+  .dot.bad{background:#ff3b5c;box-shadow:0 0 10px #ff3b5c}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:18px}
+  .stat{border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.032);border-radius:13px;padding:11px 12px}
+  .stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .stat span{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:rgba(238,240,250,.35)}
+  section{margin-top:34px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  h2{font-size:17px;letter-spacing:-.01em;margin:0}
+  .head p{margin:4px 0 0;font-size:11.5px;color:rgba(238,240,250,.42)}
+  .head a{font-size:11.5px;font-weight:800;color:#9df9f5;text-decoration:none}
+  .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+  .card{position:relative;border:1px solid rgba(255,255,255,.1);background:linear-gradient(160deg,rgba(255,255,255,.052),rgba(255,255,255,.014));border-radius:14px;padding:13px;overflow:hidden}
+  .card.open{border-color:rgba(254,44,85,.48)}
+  .card.gold{border-color:rgba(245,182,66,.42)}
+  .row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .who{font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sub{font-size:10px;color:rgba(238,240,250,.42);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .timer{font-size:16px;font-weight:900;font-variant-numeric:tabular-nums;text-align:right}
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}
+  .m{border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:5px;text-align:center;background:rgba(0,0,0,.26)}
+  .m b{display:block;font-size:13px;font-variant-numeric:tabular-nums}
+  .m span{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:rgba(238,240,250,.35)}
+  .open-live{display:block;margin-top:9px;text-align:center;padding:8px;border-radius:9px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:900;font-size:11.5px;text-decoration:none}
+  .stream{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);border-radius:12px;padding:9px 12px;margin-bottom:7px}
+  .stream a{font-size:11px;font-weight:800;color:#9df9f5;text-decoration:none;white-space:nowrap}
+  .live-tag{display:inline-block;background:rgba(254,44,85,.16);border:1px solid rgba(254,44,85,.4);color:#ff9eb2;font-size:8px;font-weight:900;letter-spacing:.1em;padding:2px 6px;border-radius:5px;vertical-align:middle}
+  .empty{padding:30px 16px;text-align:center;color:rgba(238,240,250,.42);font-size:12px;border:1px dashed rgba(255,255,255,.12);border-radius:14px}
+  .empty b{display:block;color:#eef0fa;font-size:13px;margin-bottom:5px}
+  .cols{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+  .panel{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.032);border-radius:16px;padding:16px}
+  .panel h3{margin:0 0 6px;font-size:14px}
+  .panel p{margin:0;font-size:11.5px;line-height:1.7;color:rgba(238,240,250,.5)}
+  .steps{counter-reset:step;display:grid;gap:9px;margin-top:12px}
+  .step{display:flex;gap:10px;align-items:flex-start}
+  .step::before{counter-increment:step;content:counter(step);flex:none;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:10px;font-weight:900;color:#9df9f5;border:1px solid rgba(37,244,238,.3);background:rgba(37,244,238,.1)}
+  .step b{display:block;font-size:11.5px}
+  .step span{font-size:10.5px;color:rgba(238,240,250,.42);line-height:1.6}
+  .btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+  .btn{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:900;font-size:12px;padding:9px 14px;border-radius:10px;text-decoration:none}
+  .btn.ghost{background:rgba(255,255,255,.06);color:#eef0fa;border:1px solid rgba(255,255,255,.12);font-weight:700}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+  pre{background:#08080f;border:1px solid rgba(255,255,255,.09);border-radius:11px;padding:12px;overflow:auto;margin:10px 0 0;color:#9df9f5}
+  .note{border:1px solid rgba(255,166,43,.24);background:rgba(255,166,43,.06);color:#ffd79b;border-radius:10px;padding:9px 11px;font-size:10.5px;line-height:1.65;margin-top:12px}
+  footer{margin-top:38px;font-size:10px;color:rgba(238,240,250,.3);line-height:1.8}
+  footer a{color:rgba(157,249,245,.72)}
+  .err{color:#ff9eb2;font-size:11px;margin-top:10px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<div class="logo"><span class="mark">A</span> ARENA WEB LIBRARY</div>
-<h1>TikTok LIVE overlay'leri<br /><span>tek satır HTML ile.</span></h1>
-<p>Zero dependency widget seti. Arena Live OS panelinizden gelen canlı elmas, top gifter, sohbet ve hedef verisini GitHub Pages üzerinde yayınlayın. OBS'e browser source olarak ekleyin.</p>
-<div class="panel"><strong style="font-size:13px">Canlı demo</strong><div class="grid" style="margin-top:14px"><div data-arena="goal" data-username="elif_live" data-goal="5000" data-label="Elmas Hedefi"></div><div data-arena="top-gifters" data-username="elif_live" data-rows="4"></div><div data-arena="chat" data-username="elif_live" data-rows="5"></div><div data-arena="stats" data-username="elif_live"></div></div></div>
-<div class="grid"><div class="panel"><span class="badge">Embed</span><pre>&lt;script src="arena-widget.js"&gt;&lt;/script&gt;
-&lt;div data-arena="goal" data-username="elif_live" data-goal="5000"&gt;&lt;/div&gt;</pre></div><div class="panel"><span class="badge">API</span><p style="margin-top:12px;font-size:12px">Paneliniz kapalıysa widget "Bağlantı yok" durumuna düşer. Demo için paneli başlatın:</p><pre>npm run start
-# http://localhost:3000
-# /api/live/feed?username=elif_live</pre></div></div>
-<a class="btn" href="overlay.html" target="_blank">Overlay'i aç ↗</a>
-<a class="btn" href="sandik.html" target="_blank" style="background:rgba(255,255,255,.08);color:#eef0fa;margin-left:8px">Sandık radarı ↗</a>
-<footer>Arena Live OS · MIT · TikTok resmi API'si değildir.</footer>
+  <nav>
+    <div class="brand"><span class="mark">A</span> ARENA RADAR</div>
+    <div class="navlinks">
+      <a href="sandik.html">Sandık radarı</a>
+      <a href="overlay.html" target="_blank" rel="noreferrer">Overlay</a>
+      <a href="https://github.com/CehennemGibiyim/ArenaSag" target="_blank" rel="noreferrer">GitHub</a>
+      <a class="primary" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows'u indir</a>
+    </div>
+  </nav>
+
+  <h1>TikTok LIVE radarı,<br /><span>sen girmesen de açık.</span></h1>
+  <p class="lead">
+    GitHub Actions her <b>5 dakikada</b> bir yayıncıları ve sandıkları tarar, sonucu bu sayfaya yazar.
+    Panel, veritabanı veya oturum gerekmez. Windows uygulaması aynı veriyi <b>5 saniyede</b> bir çeker,
+    sandık açılmadan önce masaüstü bildirimi gönderir.
+  </p>
+
+  <div class="status">
+    <span class="pill"><i class="dot" id="dot"></i><span id="source">GitHub Radar</span></span>
+    <span id="fresh">veri yükleniyor…</span>
+    <span id="extra"></span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="sChests">—</b><span>Sandık</span></div>
+    <div class="stat"><b id="sStreams">—</b><span>Canlı yayın</span></div>
+    <div class="stat"><b id="sBest">—</b><span>En iyi oran</span></div>
+    <div class="stat"><b id="sSoon">—</b><span>En yakın açılış</span></div>
+  </div>
+  <div class="err" id="err"></div>
+
+  <section>
+    <div class="head">
+      <div>
+        <h2>Öne çıkan sandıklar</h2>
+        <p>Oran = jeton ÷ kontenjan. Yüksek oran, kişi başı daha çok jeton demek.</p>
+      </div>
+      <a href="sandik.html">Tüm sandıklar →</a>
+    </div>
+    <div class="grid" id="chestGrid"><div class="empty"><b>Tarama verisi yükleniyor</b>GitHub Radar ilk turunu tamamladığında sandıklar burada listelenir.</div></div>
+  </section>
+
+  <section>
+    <div class="head">
+      <div>
+        <h2>Canlı yayınlar</h2>
+        <p>Canlılık TikTok check_alive ile doğrulanır; tahmin edilmez.</p>
+      </div>
+      <a href="sandik.html">Radarı aç →</a>
+    </div>
+    <div id="streamList"><div class="empty">Henüz doğrulanmış canlı yayın yok.</div></div>
+  </section>
+
+  <section class="cols">
+    <div class="panel">
+      <h3>Windows kurulumu</h3>
+      <p>Kurulum paketi GitHub'da üretilir. Açılışta yeni sürümü denetler, veriyi GitHub'dan çeker ve arka planda çalışır.</p>
+      <div class="steps">
+        <div class="step"><div><b>İndir</b><span>ArenaRadar-Setup.exe — imzalı olmayan açık kaynak kurulum.</span></div></div>
+        <div class="step"><div><b>Kur ve aç</b><span>Masaüstü ve başlangıç kısayolu oluşur; yönetici gerekmez.</span></div></div>
+        <div class="step"><div><b>Bildirimi aç</b><span>Yüksek oranlı sandık açılmadan önce uyarı gelir.</span></div></div>
+      </div>
+      <div class="btnrow">
+        <a class="btn" href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows kurulum paketi</a>
+        <a class="btn ghost" href="https://github.com/CehennemGibiyim/ArenaSag/releases" target="_blank" rel="noreferrer">Sürümler</a>
+      </div>
+      <div class="note">Otomatik jeton toplama TikTok tarafından sunulmaz. Uygulama sandığı süresi dolmadan gösterir ve canlıya tek tıkla götürür.</div>
+    </div>
+
+    <div class="panel">
+      <h3>Sürekli tarama nasıl çalışır?</h3>
+      <p>Tarama GitHub sunucularında döner; bilgisayarın kapalı olsa bile yeni yayıncılar ve sandıklar bulunur.</p>
+      <pre>GitHub Actions · cron */5
+  → aday yayıncılar (Tik.Tools, TikWM, dizin)
+  → user/room + check_alive doğrulama
+  → room/info → sandık zarfı
+  → web/data/arena-live.json
+  → GitHub Pages + Windows Radar</pre>
+      <p style="margin-top:10px">Veri akışı: <code>web/data/arena-live.json</code>. Windows uygulaması ham GitHub adresini 5 saniyede bir sorgular, değişiklik yoksa bant genişliği harcamaz.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <div>
+        <h2>Overlay kütüphanesi</h2>
+        <p>OBS browser source için hazır widget'lar. Panel API'sine bağlanır.</p>
+      </div>
+      <a href="overlay.html" target="_blank" rel="noreferrer">Overlay'i aç ↗</a>
+    </div>
+    <div class="panel">
+      <pre>&lt;script src="arena-widget.js"&gt;&lt;/script&gt;
+&lt;div data-arena="goal" data-username="elif_live" data-goal="5000"&gt;&lt;/div&gt;
+&lt;div data-arena="top-gifters" data-username="elif_live" data-rows="5"&gt;&lt;/div&gt;
+&lt;div data-arena="chat" data-username="elif_live" data-rows="8"&gt;&lt;/div&gt;</pre>
+    </div>
+  </section>
+
+  <footer>
+    Arena Radar · MIT lisansı · TikTok ile resmi bağlantısı yoktur. Yalnızca kamuya açık yayın verisi okunur.<br />
+    <a href="sandik.html">Sandık radarı</a> · <a href="https://github.com/CehennemGibiyim/ArenaSag">Kaynak kodu</a> ·
+    <a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows kurulum</a>
+  </footer>
 </div>
-<script>window.ARENA_API_BASE = window.ARENA_API_BASE || localStorage.getItem("arenaApi") || "http://localhost:3000";</script>
-<script src="arena-widget.js"></script>
+
+<script src="arena-data.js"></script>
+<script>
+  var D = window.ArenaData;
+
+  function timerColor(seconds) {
+    if (seconds <= 0) return "#ff3b5c";
+    if (seconds <= 30) return "#ffa62b";
+    return "#2ee6a8";
+  }
+
+  function chestCard(chest) {
+    var left = D.secondsLeft(chest);
+    var card = document.createElement("div");
+    card.className = "card" + (left <= 0 ? " open" : "") + (chest.variant === "gold" ? " gold" : "");
+    card.innerHTML =
+      '<div class="row"><div style="min-width:0"><div class="who">@' + D.escapeHtml(chest.username) + '</div>' +
+      '<div class="sub">' + D.escapeHtml(chest.title || chest.variant) + '</div></div>' +
+      '<div class="timer" style="color:' + timerColor(left) + '">' + (left > 0 ? D.clock(left) : "AÇIK") + '</div></div>' +
+      '<div class="metrics"><div class="m"><b>' + D.formatNumber(chest.coins) + '</b><span>Jeton</span></div>' +
+      '<div class="m"><b style="color:#9df9f5">' + D.ratioOf(chest) + '</b><span>Oran</span></div>' +
+      '<div class="m"><b>' + D.formatNumber(chest.slots) + '</b><span>Kontenjan</span></div></div>' +
+      '<a class="open-live" target="_blank" rel="noreferrer" href="' + D.escapeHtml(chest.openUrl || D.liveUrl(chest.username)) + '">Canlıya gir</a>';
+    return card;
+  }
+
+  function render(data) {
+    var chests = data.chests || [];
+    var streams = data.streams || [];
+    var best = chests.reduce(function (max, chest) { return Math.max(max, D.ratioOf(chest)); }, 0);
+    var soon = chests.reduce(function (min, chest) {
+      var left = D.secondsLeft(chest);
+      return left > 0 && left < min ? left : min;
+    }, Infinity);
+    document.getElementById("sChests").textContent = D.formatNumber(chests.length);
+    document.getElementById("sStreams").textContent = D.formatNumber(streams.length);
+    document.getElementById("sBest").textContent = best ? best + "×" : "—";
+    document.getElementById("sSoon").textContent = Number.isFinite(soon) ? D.clock(soon) : "—";
+
+    var grid = document.getElementById("chestGrid");
+    grid.innerHTML = "";
+    var top = D.sortChests(chests, "ratio", true).slice(0, 3);
+    if (!top.length) {
+      grid.innerHTML = '<div class="empty"><b>Henüz sandık yok</b>Son tarama sandık bulamadı; bir sonraki tur birkaç dakika içinde çalışır.</div>';
+    } else {
+      top.forEach(function (chest) { grid.appendChild(chestCard(chest)); });
+    }
+
+    var list = document.getElementById("streamList");
+    list.innerHTML = "";
+    if (!streams.length) {
+      list.innerHTML = '<div class="empty">Henüz doğrulanmış canlı yayın yok.</div>';
+    }
+    streams.slice(0, 6).forEach(function (stream) {
+      var row = document.createElement("div");
+      row.className = "stream";
+      row.innerHTML =
+        '<div style="min-width:0"><div class="who">@' + D.escapeHtml(stream.username) + ' <span class="live-tag">CANLI</span></div>' +
+        '<div class="sub">' + D.escapeHtml(stream.title || "yayın") + ' · ' + D.formatNumber(stream.viewers) + ' izleyici</div></div>' +
+        '<a target="_blank" rel="noreferrer" href="' + D.escapeHtml(stream.openUrl || D.liveUrl(stream.username)) + '">Aç ↗</a>';
+      list.appendChild(row);
+    });
+  }
+
+  function status(data, source) {
+    var scanned = D.ageSeconds(data);
+    var dot = document.getElementById("dot");
+    dot.className = "dot" + (scanned != null && scanned > 900 ? " warn" : "");
+    document.getElementById("source").textContent = "GitHub Radar" + (source && source.indexOf("raw.githubusercontent") >= 0 ? " · ham veri" : "");
+    document.getElementById("fresh").textContent =
+      data && data.generatedAt
+        ? "veri " + (scanned < 90 ? scanned + " sn" : Math.round(scanned / 60) + " dk") + " önce güncellendi · " + new Date(data.generatedAt).toLocaleTimeString("tr-TR")
+        : "ilk tarama bekleniyor…";
+    var extra = document.getElementById("extra");
+    if (data && data.stats) {
+      extra.textContent = "· " + D.formatNumber(data.stats.checked || 0) + " aday doğrulandı" +
+        (data.scanSeconds ? " · tarama " + data.scanSeconds + " sn" : "");
+    }
+  }
+
+  async function load() {
+    try {
+      var result = await D.loadSnapshot();
+      document.getElementById("err").textContent = "";
+      status(result.data, result.source);
+      render(result.data);
+      window.__arenaSnapshot = result.data;
+    } catch (error) {
+      document.getElementById("err").textContent = "Veri alınamadı: " + (error && error.message ? error.message : "bilinmeyen hata");
+    }
+  }
+
+  load();
+  setInterval(load, 10000);
+  setInterval(function () {
+    if (!window.__arenaSnapshot) return;
+    var chests = window.__arenaSnapshot.chests || [];
+    var soon = chests.reduce(function (min, chest) {
+      var left = D.secondsLeft(chest);
+      return left > 0 && left < min ? left : min;
+    }, Infinity);
+    document.getElementById("sSoon").textContent = Number.isFinite(soon) ? D.clock(soon) : "—";
+  }, 1000);
+</script>
 </body>
 </html>

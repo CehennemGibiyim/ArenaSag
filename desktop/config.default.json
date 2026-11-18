@@ -1,0 +1,16 @@
+{
+  "repo": "CehennemGibiyim/ArenaSag",
+  "dataUrls": [
+    "https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/main/web/data/arena-live.json",
+    "https://cehennemgibiyim.github.io/ArenaSag/data/arena-live.json"
+  ],
+  "pagesUrl": "https://cehennemgibiyim.github.io/ArenaSag/",
+  "pollSeconds": 5,
+  "alertRatio": 7,
+  "alertSeconds": 180,
+  "notifyDesktop": true,
+  "sound": true,
+  "autoUpdate": true,
+  "openBrowser": true,
+  "port": 4817
+}

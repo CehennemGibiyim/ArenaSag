@@ -7,6 +7,8 @@ TikTok LIVE ajansları için uçtan uca işletim paneli. Next.js (App Router) + 
 > **GERÇEK VERİ KURALI:** Panelde demo/simülasyon verisi YOKTUR. Canlı durum, izleyici sayısı, hediye elması ve sandık zarfı yalnızca gerçek TikTok uçlarından gelir. Yayında olmayan hesap için oturum açılmaz; veri yoksa liste boş kalır ve neden açıklanır.
 >
 > **KEŞİF KAPSAMI:** [Ücretsiz kaynaklar, gerçek kapsam ve dinleme bütçeleri](docs/RADAR-DINLEME.md). Tik.Tools örneklemi, ülke etiketli yayıncı dizini, TikWM bölgesel adayları ve ortak yayıncılar canlılık kontrolünden geçer. Hiçbir kaynak tüm dünya yayınlarının eksiksiz listesi değildir. Ücretli bölge feed’i varsayılan olarak kapalıdır.
+>
+> **GITHUB RADAR:** Panel kapalıyken de çalışan sürekli tarama GitHub Actions üzerinde döner, sonucu `web/data/arena-live.json` olarak yayınlar. Web paneli ve Windows uygulaması bu dosyayı okur. Kurulum: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md).
 
 ## Öne çıkan sistemler
 
@@ -24,6 +26,8 @@ TikTok LIVE ajansları için uçtan uca işletim paneli. Next.js (App Router) + 
 | **Overlay Sunucusu** | OBS browser source için hedef barı, top gifter, sohbet, alert, stats widget'ları | `/overlay/[slug]`, `GET /api/live/feed` |
 | **GitHub Web Kütüphanesi** | Zero-dependency `arena-widget.js`, GitHub Pages workflow'u, statik overlay | `GET /api/packages/library` |
 | **Windows Paketi** | `KURULUM.bat`, PowerShell sihirbazı, portable başlatıcı, NSIS şablonu | `GET /api/packages/windows` |
+| **GitHub Radar** | GitHub Actions panel/oturum olmadan ~5 dakikada bir taranır; canlı yayınlar ve sandıklar JSON olarak yayınlanır | `scripts/radar-publish.mjs`, `.github/workflows/radar.yml` |
+| **Windows Radar** | GitHub verisini 5 saniyede bir çeken, sandık açılmadan masaüstü bildirimi gönderen hafif istemci; açılışta sürüm denetimi | `desktop/`, `ArenaRadar-Setup.exe` |
 | **Gelir** | Elmas→TL/USD hesaplayıcı, komisyon, tahsilat durumu | `/gelir` |
 | **Fırsatlar / Ajanslar / Hesaplar** | Tam CRUD, CSV dışa aktarım, arama ve filtreler | `/firsatlar`, `/ajanslar`, `/hesaplar` |
 | **AI Koç** | Yayın senaryosu, hediye stratejisi, marka teklifi; OpenAI opsiyonel | `/ai`, `POST /api/ai/chat` |
@@ -45,6 +49,23 @@ curl -X POST http://localhost:3000/api/demo/seed
 ```
 
 Windows için: `KURULUM.bat` → `Arena-Live-OS.bat`. Detay: [docs/WINDOWS-KURULUM.md](docs/WINDOWS-KURULUM.md)
+
+### GitHub'da sürekli radar (önerilen)
+
+```bash
+# yerelde bir tur tarama (GitHub Actions ile aynı betik)
+node scripts/radar-publish.mjs
+
+# web panelini yerelde aç
+python -m http.server 8080 --directory web
+
+# Windows istemcisi (panel/PostgreSQL gerekmez)
+node desktop/main.mjs
+```
+
+GitHub'da: Settings → Pages → **GitHub Actions**, Actions → General → **Read and write permissions**,
+sonra **Arena Radar Scan** iş akışını çalıştırın. Kurulum paketi **Windows Radar Release** iş akışıyla
+GitHub Release'e yüklenir. Ayrıntı: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md)
 
 GitHub Pages overlay kütüphanesi: [docs/WEB-KUTUPHANE.md](docs/WEB-KUTUPHANE.md)
 

@@ -1,0 +1,19 @@
+# Bağımlılıklar ve derleme çıktıları
+node_modules/
+.next/
+out/
+build/
+dist/
+release/
+*.tsbuildinfo
+
+# Ortam ve günlükler
+.env
+.env.local
+*.log
+logs/
+web/data/*.tmp
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db

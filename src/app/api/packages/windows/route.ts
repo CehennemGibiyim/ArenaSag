@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ROOT = process.cwd();
-const INCLUDE_DIRS = ["src", "scripts", "docs", "public", "agent", "web", ".github"];
+const INCLUDE_DIRS = ["src", "scripts", "docs", "public", "agent", "web", "desktop", ".github"];
 const INCLUDE_FILES = [
   "package.json",
   "package-lock.json",
@@ -48,6 +48,10 @@ Gereksinim: Node.js 20+, PostgreSQL 14+
 Arka plan tarama: scripts/windows/install-service.ps1 (NSSM veya Görev Zamanlayıcı)
 Güncelleme: Arena-Update.bat (GitHub Release, SHA256 doğrulamalı)
 Ilk veri: Invoke-RestMethod -Method Post http://localhost:3000/api/demo/seed
+
+Hafif Windows Radar uygulamasi (panel/PostgreSQL gerekmez):
+GitHub Release -> ArenaRadar-Setup.exe. GitHub Actions taramasinin yayinladigi
+web/data/arena-live.json dosyasini okur ve sandik bildirimi gonderir.
 `;
 
 async function addDirectory(zip: JSZip, relative: string) {

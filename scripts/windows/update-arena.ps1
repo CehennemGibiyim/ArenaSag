@@ -1,6 +1,6 @@
 param([string]$Repo = $env:ARENA_GITHUB_REPO, [switch]$Force)
 $ErrorActionPreference = "Stop"
-if (-not $Repo) { $Repo = "CehennemGibiyim/Arena" }
+if (-not $Repo) { $Repo = "CehennemGibiyim/ArenaSag" }
 $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $Root
 $current = (Get-Content (Join-Path $Root "version.json") -Raw | ConvertFrom-Json).version

@@ -30,7 +30,8 @@ const FILES = [
   ["scripts/installer.nsi", "NSIS kurulum dosyası şablonu"],
   ["Arena-Live-OS.bat", "Üretim başlatıcı (paket içinde)"],
   ["Arena-Update.bat", "Tek tıkla güncelleme"],
-  ["web/", "GitHub Pages statik web kütüphanesi"],
+  ["desktop/", "Arena Radar Windows istemcisi (GitHub verisi)"],
+  ["web/", "GitHub Pages canlı radar + statik kütüphane"],
   ["src/", "Next.js panel kaynak kodu"],
   ["public/arena-widget.js", "GitHub Pages overlay kütüphanesi"],
 ];
@@ -112,8 +113,11 @@ export function PackageCenter() {
               build alır ve masaüstü kısayolu ekler.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <a href="/api/packages/windows" className="btn btn-primary">
-                <Download size={14} /> Windows paketini indir (.zip)
+              <a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe" className="btn btn-primary">
+                <Download size={14} /> Arena Radar kurulum (.exe)
+              </a>
+              <a href="/api/packages/windows" className="btn">
+                <Download size={14} /> Tam panel paketi (.zip)
               </a>
               <button onClick={() => void copy(EXE_COMMANDS, "exe")} className="btn">
                 {copied === "exe" ? <Check size={13} /> : <Terminal size={13} />}

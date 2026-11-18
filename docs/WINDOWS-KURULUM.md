@@ -2,6 +2,30 @@
 
 > TikTok LIVE ajansları için canlı yayın stüdyosu, radar, bot, overlay sunucusu ve gelir muhasebesi.
 
+## 0. Arena Radar — önerilen hafif kurulum
+
+Tam panel (PostgreSQL + Node.js) kurmak istemiyorsan yalnızca GitHub'daki canlı radarı izleyen
+Windows uygulamasını kur:
+
+1. [ArenaRadar-Setup.exe](https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe) indir.
+2. Çalıştır. Kurulum `%LOCALAPPDATA%\Programs\Arena Radar` altına yapılır; **yönetici izni gerekmez**.
+3. Uygulama açılır, masaüstü ve başlangıç kısayolları oluşur.
+4. Veri GitHub Actions taramasından gelir: `web/data/arena-live.json`.
+
+| Özellik | Davranış |
+| --- | --- |
+| Veri tazeleme | Varsayılan 5 sn (3–120 sn ayarlanabilir) |
+| Veri kaynağı | `raw.githubusercontent.com` → GitHub Pages yedeği |
+| Bildirim | Yeni sandıkta oran ≥ 7 ve açılışa ≤ 180 sn varsa Windows balon bildirimi + ses |
+| Güncelleme | Açılışta ve 10 dakikada bir GitHub Release denetimi; yeni sürüm otomatik indirilir |
+| Değişiklik algılama | `version.json` 60 sn'de bir, veri 5 sn'de bir denetlenir |
+| Arka plan | Başlangıç kısayolu `--silent` ile tarayıcı açmadan çalıştırır |
+| Kaldırma | Ayarlar → Uygulamalar → Arena Radar |
+
+Kurulum paketi GitHub Actions (`Windows Radar Release`) tarafından üretilir; kaynak: `desktop/`.
+Otomatik jeton toplama TikTok tarafından sunulmaz; uygulama sandığı süresi dolmadan gösterip
+canlıya tek tıkla götürür. Tarama mimarisi: [GITHUB-RADAR.md](GITHUB-RADAR.md).
+
 ## 1. Gereksinimler
 
 | Bileşen | Sürüm | Not |
@@ -113,7 +137,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\update-arena.ps1
 ```
 
 Güncelleyici:
-- `CehennemGibiyim/Arena` reposunun en son Release'ini indirir.
+- `CehennemGibiyim/ArenaSag` reposunun en son Release'ini indirir.
 - `SHA256SUMS.txt` varsa hash doğrular.
 - `.env` dosyasını korur, servisi durdurur, dosyaları günceller, `npm ci`, `drizzle-kit push`, `npm run build` çalıştırır ve servisi yeniden başlatır.
 - GitHub Actions her `v*` tag'inde `Arena-Live-OS-windows.zip` Release asset'i üretir.

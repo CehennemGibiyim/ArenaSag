@@ -3,34 +3,331 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Arena Sandık Radarı — GitHub Pages</title>
+<meta name="color-scheme" content="dark" />
+<title>Arena Sandık Radarı — GitHub canlı veri</title>
+<meta name="description" content="TikTok LIVE sandık radarı. GitHub Actions sürekli tarar, bu sayfa panel kapalıyken de canlı veriyi gösterir." />
 <style>
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(800px 500px at 12% -10%,rgba(37,244,238,.14),transparent),radial-gradient(700px 500px at 88% 0%,rgba(254,44,85,.16),transparent),#050509;color:#eef0fa;font-family:Inter,'Segoe UI',system-ui,sans-serif;padding:24px 16px}.wrap{max-width:1180px;margin:0 auto}.head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}.logo{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.2em;font-size:12px}.mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#25f4ee,#fe2c55);display:grid;place-items:center;color:#05060a;font-weight:900}input,select{background:#0a0b12;border:1px solid rgba(255,255,255,.12);color:#eef0fa;border-radius:9px;padding:7px 10px;font-size:12px;font-family:inherit}button{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#eef0fa;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}button.on{border-color:rgba(37,244,238,.5);background:rgba(37,244,238,.12);color:#9df9f5}.status{margin:12px 0 4px;font-size:11px;color:rgba(238,240,250,.45)}.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));margin-top:12px}.card{border:1px solid rgba(255,255,255,.1);background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border-radius:14px;padding:13px}.card.open{border-color:rgba(254,44,85,.45)}.card.gold{border-color:rgba(245,182,66,.4)}.row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.who{font-size:13px;font-weight:700}.sub{font-size:10px;color:rgba(238,240,250,.4);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.timer{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}.metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:9px}.m{border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:5px;text-align:center;background:rgba(0,0,0,.25)}.m b{display:block;font-size:13px;font-variant-numeric:tabular-nums}.m span{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:rgba(238,240,250,.35)}a.open-live{display:block;margin-top:9px;text-align:center;padding:8px;border-radius:9px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:800;font-size:11.5px;text-decoration:none}.empty{padding:40px;text-align:center;color:rgba(238,240,250,.4);font-size:12px}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.tabs button{font-size:11px;padding:5px 9px}.err{color:#ff9eb2;font-size:11px;margin-top:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 560px at 8% -12%,rgba(37,244,238,.15),transparent),radial-gradient(760px 520px at 92% -6%,rgba(254,44,85,.17),transparent),#050509;color:#eef0fa;font-family:Inter,'Segoe UI',system-ui,-apple-system,sans-serif;padding:22px 16px 40px}
+  .wrap{max-width:1240px;margin:0 auto}
+  .head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.18em;font-size:12px}
+  .mark{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#25f4ee,#fe2c55);display:grid;place-items:center;color:#05060a;font-weight:900;letter-spacing:0}
+  .tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  input,select{background:#0a0b12;border:1px solid rgba(255,255,255,.12);color:#eef0fa;border-radius:9px;padding:7px 10px;font-size:12px;font-family:inherit;outline:none}
+  input:focus,select:focus{border-color:rgba(37,244,238,.55)}
+  button{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#eef0fa;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+  button:hover{border-color:rgba(255,255,255,.25)}
+  button.on{border-color:rgba(37,244,238,.55);background:rgba(37,244,238,.13);color:#9df9f5}
+  .statusline{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px;font-size:11px;color:rgba(238,240,250,.5)}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:99px;padding:4px 9px;font-size:10px;font-weight:700;letter-spacing:.04em}
+  .dot{width:6px;height:6px;border-radius:99px;background:#2ee6a8;box-shadow:0 0 10px #2ee6a8}
+  .dot.warn{background:#ffa62b;box-shadow:0 0 10px #ffa62b}
+  .dot.bad{background:#ff3b5c;box-shadow:0 0 10px #ff3b5c}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px}
+  .stat{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:11px;padding:8px 10px}
+  .stat b{display:block;font-size:16px;font-variant-numeric:tabular-nums}
+  .stat span{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:rgba(238,240,250,.36)}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+  .tabs button{font-size:11px;padding:5px 9px}
+  .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));margin-top:12px}
+  .card{position:relative;border:1px solid rgba(255,255,255,.1);background:linear-gradient(160deg,rgba(255,255,255,.052),rgba(255,255,255,.014));border-radius:14px;padding:13px;overflow:hidden}
+  .card.open{border-color:rgba(254,44,85,.5);box-shadow:0 0 0 1px rgba(254,44,85,.08) inset}
+  .card.gold{border-color:rgba(245,182,66,.45)}
+  .card.hanging{border-color:rgba(180,140,255,.4)}
+  .card.new::after{content:"YENİ";position:absolute;top:0;right:0;background:linear-gradient(100deg,#25f4ee,#7c5cff);color:#05060a;font-size:8px;font-weight:900;letter-spacing:.1em;padding:3px 8px;border-radius:0 0 0 8px}
+  .row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .who{font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+  .sub{font-size:10px;color:rgba(238,240,250,.42);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .timer{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;text-align:right}
+  .timer small{display:block;font-size:8.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:rgba(238,240,250,.35);margin-top:1px}
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}
+  .m{border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:5px;text-align:center;background:rgba(0,0,0,.26)}
+  .m b{display:block;font-size:13px;font-variant-numeric:tabular-nums}
+  .m span{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:rgba(238,240,250,.35)}
+  .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px}
+  .open-live{display:block;flex:1;text-align:center;padding:8px;border-radius:9px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:900;font-size:11.5px;text-decoration:none}
+  .copy{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#eef0fa;border-radius:9px;padding:8px 9px;font-size:11px}
+  .empty{padding:46px 18px;text-align:center;color:rgba(238,240,250,.45);font-size:12px;border:1px dashed rgba(255,255,255,.12);border-radius:14px;margin-top:12px}
+  .empty b{display:block;color:#eef0fa;font-size:14px;margin-bottom:6px}
+  .err{color:#ff9eb2;font-size:11px;margin-top:9px}
+  .warnbox{border:1px solid rgba(255,166,43,.28);background:rgba(255,166,43,.07);color:#ffd79b;border-radius:10px;padding:8px 10px;font-size:11px;margin-top:10px}
+  .stream-card{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);border-radius:12px;padding:10px 12px}
+  .live-tag{display:inline-block;background:rgba(254,44,85,.16);border:1px solid rgba(254,44,85,.4);color:#ff9eb2;font-size:8px;font-weight:900;letter-spacing:.1em;padding:2px 6px;border-radius:5px;vertical-align:middle}
+  .stream-card a{color:#9df9f5;font-size:11px;font-weight:700;text-decoration:none}
+  footer{margin-top:26px;font-size:10px;color:rgba(238,240,250,.3);line-height:1.7}
+  footer a{color:rgba(157,249,245,.75)}
+  @media (max-width:520px){.who{max-width:140px}}
 </style>
 </head>
 <body>
 <div class="wrap">
-<div class="head"><div class="logo"><span class="mark">A</span> ARENA SANDIK RADARI</div><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="api" placeholder="Panel adresi" style="width:230px" /><input id="q" placeholder="Yayıncı ara" style="width:130px" /><select id="sort"><option value="opens_at">Açılış</option><option value="coins">Jeton</option><option value="ratio">Oran</option><option value="per_slot">Kişi başı</option><option value="viewers">İzleyici</option></select><button id="dir">↓</button><button id="refresh">↻</button></div></div>
-<div class="tabs" id="tabs"></div><div class="status" id="status">yükleniyor…</div><div class="err" id="err"></div><div class="grid" id="grid"></div>
+  <div class="head">
+    <div class="brand"><span class="mark">A</span> ARENA SANDIK RADARI</div>
+    <div class="tools">
+      <input id="q" placeholder="Yayıncı ara" style="width:130px" autocomplete="off" />
+      <select id="sort" title="Sıralama">
+        <option value="opens_at">Açılış</option>
+        <option value="ratio">Oran</option>
+        <option value="coins">Jeton</option>
+        <option value="per_slot">Kişi başı</option>
+        <option value="slots">Kontenjan</option>
+        <option value="viewers">İzleyici</option>
+        <option value="detected">Tespit</option>
+      </select>
+      <button id="dir" title="Yön">↓</button>
+      <button id="refresh" title="Yenile">↻</button>
+      <button id="panelBtn" title="Panel API'sine bağlan">Panel</button>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span class="pill"><i class="dot" id="dot"></i><span id="source">GitHub Radar</span></span>
+    <span id="fresh">veri yükleniyor…</span>
+    <span id="extra"></span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="sChests">—</b><span>Sandık</span></div>
+    <div class="stat"><b id="sStreams">—</b><span>Canlı yayın</span></div>
+    <div class="stat"><b id="sBest">—</b><span>En iyi oran</span></div>
+    <div class="stat"><b id="sSoon">—</b><span>En yakın açılış</span></div>
+    <div class="stat"><b id="sScan">—</b><span>Son tarama</span></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="notice"></div>
+  <div class="grid" id="grid"></div>
+  <div class="err" id="err"></div>
+
+  <footer>
+    Veri: GitHub Actions radar taraması (yaklaşık 5 dakikada bir) · Jeton toplama TikTok uygulamasında yapılır, bu sayfa canlıya tek tıkla götürür.<br />
+    <a href="index.html">Arena Radar</a> · <a href="https://github.com/CehennemGibiyim/ArenaSag">GitHub</a> ·
+    <a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows uygulaması</a> ·
+    TikTok resmi API'si değildir.
+  </footer>
 </div>
+
+<script src="arena-data.js"></script>
 <script>
-var API = localStorage.getItem("arenaApi") || window.ARENA_API_BASE || "http://localhost:3000";
-var state = { tab: "chest", q: "", sort: "opens_at", desc: true, chests: [], flows: [], tabs: [] };
-var apiInput = document.getElementById("api"), qInput = document.getElementById("q"), sortInput = document.getElementById("sort"), dirBtn = document.getElementById("dir");
-apiInput.value = API;
-function fmt(n){ n=Number(n)||0; if(n>=1e6)return (n/1e6).toFixed(1)+"M"; if(n>=1e3)return (n/1e3).toFixed(n%1e3===0?0:1)+"K"; return new Intl.NumberFormat("tr-TR").format(n); }
-function clock(s){ s=Math.max(0,Math.round(s)); if(s<60)return s+"s"; var m=Math.floor(s/60); if(m<60)return m+":"+String(s%60).padStart(2,"0"); return Math.floor(m/60)+"h"+String(m%60).padStart(2,"0"); }
-function color(s){ return s<=0?"#ff3b5c":s<=30?"#ffa62b":"#2ee6a8"; }
-function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
-function renderTabs(counts){ var el=document.getElementById("tabs"); el.innerHTML=""; (state.tabs.length?state.tabs:[{id:"chest",label:"Sandık",filter:{kind:"chest"}},{id:"flow",label:"Jeton akışı",filter:{kind:"live"}}]).forEach(function(tab){ var b=document.createElement("button"); b.textContent=tab.label+" ("+(counts&&counts[tab.id]!=null?counts[tab.id]:0)+")"; if(state.tab===tab.id)b.className="on"; b.onclick=function(){state.tab=tab.id;load();}; el.appendChild(b); }); }
-function currentTab(){ return state.tabs.find(function(t){return t.id===state.tab;}) || {filter:{kind:"chest"}}; }
-function render(){ var grid=document.getElementById("grid"), tab=currentTab(), rows=(state.tab==="flow"||(tab.filter&&tab.filter.kind==="live"))?state.flows:state.chests; if(state.q) rows=rows.filter(function(r){return (r.username+" "+(r.nickname||"")+" "+(r.title||"")).toLowerCase().indexOf(state.q.toLowerCase())>=0;}); grid.innerHTML=""; if(!rows.length){grid.innerHTML='<div class="empty">Uygun sandık yok — panelde tarama başlatın.</div>';return;} rows.forEach(function(r){ var isFlow=r.kind==="live", left=isFlow?0:Math.round((new Date(r.opensAt||Date.now()).getTime()-Date.now())/1000), el=document.createElement("div"); el.className="card"+(!isFlow&&left<=0?" open":"")+(r.variant==="gold"?" gold":""); el.innerHTML='<div class="row"><div style="min-width:0"><div class="who">@'+esc(r.username)+'</div><div class="sub">'+esc(r.title||(isFlow?"jeton akışı":r.variant))+'</div></div><div style="text-align:right"><div class="timer" style="color:'+(isFlow?"#2ee6a8":color(left))+'">'+(isFlow?"●":(left>0?clock(left):"●"))+'</div><div class="sub">'+(isFlow?"canlı":(left>0?"açılış":"açık"))+'</div></div></div><div class="metrics"><div class="m"><b>'+fmt(r.coins)+'</b><span>Jeton</span></div><div class="m"><b style="color:#9df9f5">'+(r.ratio||0)+'</b><span>Oran</span></div><div class="m"><b>'+fmt(r.slots)+'</b><span>'+(isFlow?"Gönderen":"Kontenjan")+'</span></div></div><div class="sub" style="margin-top:7px">'+fmt(r.viewers)+' izleyici'+(isFlow?"":" · katılan "+fmt(r.joined))+'</div><a class="open-live" href="https://www.tiktok.com/@'+esc(r.username)+'/live" target="_blank" rel="noreferrer">CANLI\'yı Aç</a>'; grid.appendChild(el); }); }
-async function load(){ var tab=currentTab(), params=new URLSearchParams(); Object.keys(tab.filter||{}).forEach(function(k){ var v=tab.filter[k]; params.set(k,Array.isArray(v)?v.join(","):v); }); params.set("sort",state.sort); params.set("desc",state.desc?"1":"0"); if(state.q)params.set("q",state.q); try{ var res=await fetch(API+"/api/chests?"+params.toString(),{cache:"no-store"}); if(!res.ok)throw new Error("HTTP "+res.status); var data=await res.json(); state.chests=data.chests||[]; state.flows=data.flows||[]; if(data.tabs&&data.tabs.length)state.tabs=data.tabs; renderTabs(data.tab_counts||{}); render(); document.getElementById("status").textContent=(data.count||0)+" sandık · "+state.flows.length+" akış odası · "+new Date().toLocaleTimeString("tr-TR"); document.getElementById("err").textContent=""; }catch(e){ document.getElementById("err").textContent="Bağlantı yok: "+e.message+" — paneli başlatın veya API adresini girin."; } }
-apiInput.onchange=function(){API=apiInput.value.replace(/\/$/,"");localStorage.setItem("arenaApi",API);load();};
-qInput.oninput=function(){state.q=qInput.value;render();};
-sortInput.onchange=function(){state.sort=sortInput.value;load();};
-dirBtn.onclick=function(){state.desc=!state.desc;dirBtn.textContent=state.desc?"↓":"↑";load();};
-document.getElementById("refresh").onclick=load; setInterval(load,15000); setInterval(render,1000); load();
+  var D = window.ArenaData;
+  var state = {
+    tab: "chest",
+    q: "",
+    sort: "opens_at",
+    desc: true,
+    snapshot: null,
+    source: "",
+    lastFetchAt: 0,
+    lastError: "",
+    panel: D.panelUrl(),
+    loading: false,
+  };
+
+  var grid = document.getElementById("grid");
+  var tabsEl = document.getElementById("tabs");
+  var qInput = document.getElementById("q");
+  var sortInput = document.getElementById("sort");
+  var dirBtn = document.getElementById("dir");
+  var panelBtn = document.getElementById("panelBtn");
+
+  function chests() {
+    return (state.snapshot && state.snapshot.chests) || [];
+  }
+  function streams() {
+    return (state.snapshot && state.snapshot.streams) || [];
+  }
+  function age() {
+    return state.snapshot ? D.ageSeconds(state.snapshot) : null;
+  }
+
+  function renderTabs() {
+    var counts = D.tabCounts(chests(), streams());
+    tabsEl.innerHTML = "";
+    D.TABS.forEach(function (tab) {
+      if (tab.id === "streams" && !streams().length) return;
+      var button = document.createElement("button");
+      button.textContent = tab.label + " (" + (counts[tab.id] || 0) + ")";
+      if (state.tab === tab.id) button.className = "on";
+      button.onclick = function () {
+        state.tab = tab.id;
+        render();
+      };
+      tabsEl.appendChild(button);
+    });
+  }
+
+  function search(rows) {
+    var query = state.q.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter(function (row) {
+      return String((row.username || "") + " " + (row.nickname || "") + " " + (row.title || ""))
+        .toLowerCase()
+        .indexOf(query) >= 0;
+    });
+  }
+
+  function timerColor(seconds) {
+    if (seconds <= 0) return "#ff3b5c";
+    if (seconds <= 30) return "#ffa62b";
+    return "#2ee6a8";
+  }
+
+  function chestCard(chest, now) {
+    var left = D.secondsLeft(chest);
+    var card = document.createElement("div");
+    card.className =
+      "card" + (left <= 0 ? " open" : "") + (chest.variant === "gold" ? " gold" : "") + (chest.variant === "hanging" ? " hanging" : "");
+    var detected = Date.parse(chest.detectedAt || "");
+    var isNew = Number.isFinite(detected) && now - detected < 120000;
+    if (isNew) card.className += " new";
+    var title = chest.title || (chest.kind === "bag" ? "çanta" : chest.variant || "sandık");
+    var opens = "";
+    var opensMs = Date.parse(chest.opensAt || "");
+    if (Number.isFinite(opensMs)) {
+      opens = new Date(opensMs).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+    }
+    card.innerHTML =
+      '<div class="row"><div style="min-width:0"><div class="who">@' + D.escapeHtml(chest.username) + '</div>' +
+      '<div class="sub">' + D.escapeHtml(title) + '</div></div>' +
+      '<div class="timer" style="color:' + timerColor(left) + '">' + (left > 0 ? D.clock(left) : "AÇIK") +
+      '<small>' + (left > 0 ? opens + " açılış" : "şimdi katıl") + '</small></div></div>' +
+      '<div class="metrics"><div class="m"><b>' + D.formatNumber(chest.coins) + '</b><span>Jeton</span></div>' +
+      '<div class="m"><b style="color:#9df9f5">' + D.ratioOf(chest) + '</b><span>Oran</span></div>' +
+      '<div class="m"><b>' + D.formatNumber(chest.slots) + '</b><span>Kontenjan</span></div></div>' +
+      '<div class="foot"><span class="sub">' + D.formatNumber(chest.viewers) + ' izleyici · ' +
+      (chest.kind === "bag" ? "çanta" : chest.variant) + '</span>' +
+      '<button class="copy" title="Bağlantıyı kopyala">Kopyala</button></div>' +
+      '<div class="foot"><a class="open-live" target="_blank" rel="noreferrer" href="' +
+      D.escapeHtml(chest.openUrl || D.liveUrl(chest.username)) + '">Canlıya gir · jetonu topla</a></div>';
+    var copyButton = card.querySelector(".copy");
+    copyButton.onclick = function () {
+      var url = D.liveUrl(chest.username);
+      if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { copyButton.textContent = "Kopyalandı"; });
+    };
+    return card;
+  }
+
+  function streamCard(stream) {
+    var card = document.createElement("div");
+    card.className = "stream-card";
+    card.innerHTML =
+      '<div style="min-width:0"><div class="who">@' + D.escapeHtml(stream.username) + ' <span class="live-tag">CANLI</span></div>' +
+      '<div class="sub">' + D.escapeHtml(stream.title || "yayın") + ' · ' + D.formatNumber(stream.viewers) + ' izleyici' +
+      (stream.diamondsPerMin ? ' · ' + D.formatNumber(stream.diamondsPerMin) + ' jeton/dk' : "") + '</div></div>' +
+      '<a target="_blank" rel="noreferrer" href="' + D.escapeHtml(stream.openUrl || D.liveUrl(stream.username)) + '">Aç ↗</a>';
+    return card;
+  }
+
+  function render() {
+    if (!state.snapshot) return;
+    var now = Date.now();
+    var tab = D.tabById(state.tab);
+    grid.innerHTML = "";
+
+    if (state.tab === "streams") {
+      var liveRows = search(streams());
+      if (!liveRows.length) {
+        grid.innerHTML = '<div class="empty"><b>Doğrulanmış canlı yayın yok</b>Son tarama canlı oda bulamadı. Bir sonraki tarama birkaç dakika içinde çalışır.</div>';
+      } else {
+        liveRows.forEach(function (stream) { grid.appendChild(streamCard(stream)); });
+      }
+    } else {
+      var rows = D.sortChests(search(D.filterChests(chests(), tab.filter)), state.sort, state.desc);
+      if (!rows.length) {
+        grid.innerHTML = '<div class="empty"><b>Bu sekmede sandık yok</b>Sandıklar yalnızca gerçek yayın verisinden gelir. Tarama sürerken liste boş kalabilir.</div>';
+      } else {
+        rows.forEach(function (chest) { grid.appendChild(chestCard(chest, now)); });
+      }
+    }
+
+    var best = chests().reduce(function (max, chest) { return Math.max(max, D.ratioOf(chest)); }, 0);
+    var soon = chests().reduce(function (min, chest) {
+      var left = D.secondsLeft(chest);
+      return left > 0 && left < min ? left : min;
+    }, Infinity);
+    document.getElementById("sChests").textContent = D.formatNumber(chests().length);
+    document.getElementById("sStreams").textContent = D.formatNumber(streams().length);
+    document.getElementById("sBest").textContent = best ? best + "×" : "—";
+    document.getElementById("sSoon").textContent = Number.isFinite(soon) ? D.clock(soon) : "—";
+    var scanned = age();
+    document.getElementById("sScan").textContent = scanned == null ? "—" : scanned < 90 ? scanned + " sn" : Math.round(scanned / 60) + " dk";
+  }
+
+  function renderStatus() {
+    var dot = document.getElementById("dot");
+    var source = document.getElementById("source");
+    var fresh = document.getElementById("fresh");
+    var notice = document.getElementById("notice");
+    notice.innerHTML = "";
+    var scanned = age();
+    var stale = scanned != null && scanned > 900;
+    dot.className = "dot" + (state.lastError ? " bad" : stale ? " warn" : "");
+    source.textContent = state.snapshot && state.snapshot.source === "panel" ? "Panel API" : "GitHub Radar";
+    if (state.snapshot && state.snapshot.generatedAt) {
+      fresh.textContent = "veri " + (scanned < 90 ? scanned + " sn" : Math.round(scanned / 60) + " dk") + " önce güncellendi · " +
+        new Date(state.snapshot.generatedAt).toLocaleTimeString("tr-TR");
+    } else {
+      fresh.textContent = "ilk tarama bekleniyor…";
+    }
+    if (stale) {
+      notice.innerHTML = '<div class="warnbox">GitHub taraması gecikti. Veri son doğrulanmış hâliyle gösteriliyor; sandık süreleri değişmiş olabilir.</div>';
+    }
+    document.getElementById("err").textContent = state.lastError ? "Veri hatası: " + state.lastError : "";
+    var extra = [];
+    if (state.snapshot && state.snapshot.errors && state.snapshot.errors.length) {
+      extra.push(state.snapshot.errors.length + " kaynak uyarısı");
+    }
+    if (state.snapshot && state.snapshot.scanSeconds) extra.push("tarama " + state.snapshot.scanSeconds + " sn");
+    document.getElementById("extra").textContent = extra.length ? "· " + extra.join(" · ") : "";
+  }
+
+  async function load() {
+    if (state.loading) return;
+    state.loading = true;
+    try {
+      var result;
+      if (state.panel) result = await D.loadPanel(state.panel);
+      else result = await D.loadSnapshot();
+      state.snapshot = result.data;
+      state.source = result.source;
+      state.lastFetchAt = result.fetchedAt;
+      state.lastError = "";
+      renderTabs();
+      renderStatus();
+      render();
+    } catch (error) {
+      state.lastError = error && error.message ? error.message : "Veri alınamadı";
+      renderStatus();
+    } finally {
+      state.loading = false;
+    }
+  }
+
+  qInput.addEventListener("input", function () { state.q = qInput.value; render(); });
+  sortInput.addEventListener("change", function () { state.sort = sortInput.value; render(); });
+  dirBtn.addEventListener("click", function () {
+    state.desc = !state.desc;
+    dirBtn.textContent = state.desc ? "↓" : "↑";
+    render();
+  });
+  document.getElementById("refresh").addEventListener("click", load);
+  panelBtn.addEventListener("click", function () {
+    var value = window.prompt("Panel adresi (boş bırakırsan GitHub Radar verisi kullanılır):", state.panel || "");
+    if (value === null) return;
+    state.panel = value.trim().replace(/\/+$/, "");
+    try {
+      if (state.panel) localStorage.setItem("arenaPanel", state.panel);
+      else localStorage.removeItem("arenaPanel");
+    } catch (error) { /* özel mod */ }
+    panelBtn.className = state.panel ? "on" : "";
+    load();
+  });
+  if (state.panel) panelBtn.className = "on";
+
+  load();
+  setInterval(load, 10000);
+  setInterval(function () { renderStatus(); render(); }, 1000);
 </script>
 </body>
 </html>

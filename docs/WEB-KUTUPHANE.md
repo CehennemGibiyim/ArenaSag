@@ -3,6 +3,19 @@
 `arena-widget.js`, Arena Live OS API'sinden beslenen **sıfır bağımlılıklı** bir overlay/metrik widget setidir.
 GitHub Pages, Netlify, herhangi bir statik hosting veya OBS Browser Source üzerinde çalışır.
 
+## Canlı GitHub Radar verisi
+
+`index.html` ve `sandik.html` artık panel kapalıyken de çalışır: GitHub Actions'ın ürettiği
+`data/arena-live.json` dosyasını okur. Varsayılan kaynak sırası:
+
+1. `data/arena-live.json` (aynı origin)
+2. `https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/main/web/data/arena-live.json`
+
+Özel veri adresi: `sandik.html?data=https://.../arena-live.json`
+Arena paneli kullanılacaksa: `sandik.html?panel=https://panel.ornek.com` veya sayfadaki **Panel** düğmesi.
+
+Tarama ve veri sözleşmesi: [GITHUB-RADAR.md](GITHUB-RADAR.md)
+
 ## Kurulum (GitHub Pages)
 
 1. Panel → **Kütüphane** → **Web kütüphanesini indir** (zip).

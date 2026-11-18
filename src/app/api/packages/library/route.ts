@@ -357,12 +357,26 @@ export async function GET() {
     } catch {
       widget = "/* arena-widget.js bulunamadı — panel public klasörünü kontrol edin */";
     }
+    const webDir = path.join(process.cwd(), "web");
+    const readWeb = async (file: string, fallback: string) => {
+      try {
+        return await readFile(path.join(webDir, file), "utf8");
+      } catch {
+        return fallback;
+      }
+    };
     const folder = zip.folder("arena-web-library");
     if (!folder) throw new Error("Zip klasörü oluşturulamadı");
     folder.file("arena-widget.js", widget);
-    folder.file("index.html", INDEX_HTML);
+    folder.file("arena-data.js", await readWeb("arena-data.js", "/* arena-data.js bulunamadı */"));
+    folder.file("index.html", await readWeb("index.html", INDEX_HTML));
     folder.file("overlay.html", OVERLAY_HTML);
-    folder.file("sandik.html", SANDIK_HTML);
+    folder.file("sandik.html", await readWeb("sandik.html", SANDIK_HTML));
+    try {
+      folder.file("data/arena-live.json", await readFile(path.join(webDir, "data", "arena-live.json")));
+    } catch {
+      /* ilk tarama henüz yok */
+    }
     folder.file("README.md", README);
     folder.file("LICENSE", LICENSE);
     folder.file(".nojekyll", "");

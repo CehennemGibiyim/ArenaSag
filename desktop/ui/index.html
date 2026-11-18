@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Arena Radar — Windows</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(820px 520px at 8% -10%,rgba(37,244,238,.15),transparent),radial-gradient(720px 480px at 94% 0,rgba(254,44,85,.16),transparent),#050509;color:#eef0fa;font-family:Inter,'Segoe UI',system-ui,-apple-system,sans-serif;padding:18px 16px 36px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.16em;font-size:12px}
+  .mark{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#25f4ee,#fe2c55);display:grid;place-items:center;color:#05060a;font-weight:900;letter-spacing:0}
+  .tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  button{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#eef0fa;border-radius:9px;padding:7px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  button:hover{border-color:rgba(255,255,255,.26)}
+  button.primary{background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;border:0}
+  button.on{border-color:rgba(37,244,238,.55);background:rgba(37,244,238,.13);color:#9df9f5}
+  .statusline{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:rgba(238,240,250,.5)}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:99px;padding:4px 9px;font-size:10px;font-weight:800;letter-spacing:.03em}
+  .dot{width:6px;height:6px;border-radius:99px;background:#2ee6a8;box-shadow:0 0 10px #2ee6a8}
+  .dot.warn{background:#ffa62b;box-shadow:0 0 10px #ffa62b}
+  .dot.bad{background:#ff3b5c;box-shadow:0 0 10px #ff3b5c}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-top:12px}
+  .stat{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:11px;padding:8px 10px}
+  .stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+  .stat span{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:rgba(238,240,250,.36)}
+  .controls{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  .controls input,.controls select{background:#0a0b12;border:1px solid rgba(255,255,255,.12);color:#eef0fa;border-radius:9px;padding:7px 10px;font-size:11.5px;font-family:inherit;outline:none}
+  .controls input:focus,.controls select:focus{border-color:rgba(37,244,238,.55)}
+  .chips{display:flex;gap:5px;flex-wrap:wrap}
+  .chips button{font-size:10.5px;padding:5px 8px}
+  .grid{display:grid;gap:9px;grid-template-columns:repeat(auto-fill,minmax(262px,1fr));margin-top:10px}
+  .card{position:relative;border:1px solid rgba(255,255,255,.1);background:linear-gradient(160deg,rgba(255,255,255,.052),rgba(255,255,255,.014));border-radius:13px;padding:12px;overflow:hidden}
+  .card.open{border-color:rgba(254,44,85,.5)}
+  .card.gold{border-color:rgba(245,182,66,.44)}
+  .card.hanging{border-color:rgba(180,140,255,.4)}
+  .card.fresh::after{content:"YENİ";position:absolute;top:0;right:0;background:linear-gradient(100deg,#25f4ee,#7c5cff);color:#05060a;font-size:8px;font-weight:900;letter-spacing:.1em;padding:3px 8px;border-radius:0 0 0 8px}
+  .row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .who{font-size:12.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:168px}
+  .sub{font-size:9.5px;color:rgba(238,240,250,.42);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .timer{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;text-align:right}
+  .timer small{display:block;font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(238,240,250,.35);margin-top:1px}
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px}
+  .m{border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:4px;text-align:center;background:rgba(0,0,0,.26)}
+  .m b{display:block;font-size:12.5px;font-variant-numeric:tabular-nums}
+  .m span{font-size:7.5px;text-transform:uppercase;letter-spacing:.07em;color:rgba(238,240,250,.35)}
+  .open-live{display:block;margin-top:8px;text-align:center;padding:8px;border-radius:9px;background:linear-gradient(100deg,#25f4ee,#7c5cff,#fe2c55);color:#05060a;font-weight:900;font-size:11px;text-decoration:none}
+  .streams{margin-top:8px}
+  .stream{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);border-radius:10px;padding:8px 11px;margin-bottom:6px}
+  .stream a{color:#9df9f5;font-size:10.5px;font-weight:800;text-decoration:none;white-space:nowrap}
+  .live-tag{display:inline-block;background:rgba(254,44,85,.16);border:1px solid rgba(254,44,85,.4);color:#ff9eb2;font-size:7.5px;font-weight:900;letter-spacing:.09em;padding:1px 5px;border-radius:5px;vertical-align:middle}
+  .empty{padding:34px 16px;text-align:center;color:rgba(238,240,250,.42);font-size:11.5px;border:1px dashed rgba(255,255,255,.12);border-radius:13px;margin-top:10px}
+  .empty b{display:block;color:#eef0fa;font-size:13px;margin-bottom:5px}
+  .banner{border:1px solid rgba(37,244,238,.35);background:rgba(37,244,238,.08);color:#bdfcf9;border-radius:11px;padding:9px 11px;font-size:11px;margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .banner.warn{border-color:rgba(255,166,43,.3);background:rgba(255,166,43,.07);color:#ffd79b}
+  .banner button{font-size:10.5px;padding:5px 9px}
+  .err{color:#ff9eb2;font-size:10.5px;margin-top:8px}
+  h2{font-size:13px;margin:22px 0 0;letter-spacing:.02em;text-transform:uppercase;color:rgba(238,240,250,.55);font-size:10px;letter-spacing:.12em}
+  .alerts{margin-top:8px;display:grid;gap:5px}
+  .alert{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025);border-radius:9px;padding:7px 10px;font-size:10.5px;color:rgba(238,240,250,.62)}
+  dialog{border:1px solid rgba(255,255,255,.12);background:#0b0c14;color:#eef0fa;border-radius:16px;padding:0;width:min(430px,92vw)}
+  dialog::backdrop{background:rgba(0,0,0,.62)}
+  .settings{padding:16px}
+  .settings h3{margin:0 0 4px;font-size:15px}
+  .settings p{margin:0 0 12px;font-size:10.5px;color:rgba(238,240,250,.42);line-height:1.6}
+  .field{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.055);font-size:11.5px}
+  .field:last-of-type{border-bottom:0}
+  .field input[type=number]{width:80px;background:#0a0b12;border:1px solid rgba(255,255,255,.12);color:#eef0fa;border-radius:8px;padding:5px 8px;font-size:11px;font-family:inherit}
+  .field label{display:flex;align-items:center;gap:7px;cursor:pointer}
+  .settings .actions{display:flex;gap:6px;justify-content:flex-end;margin-top:12px}
+  footer{margin-top:24px;font-size:9.5px;color:rgba(238,240,250,.28);line-height:1.7}
+  footer a{color:rgba(157,249,245,.65);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="mark">A</span> ARENA RADAR</div>
+    <div class="tools">
+      <button id="openWeb">Web radar</button>
+      <button id="settingsBtn">Ayarlar</button>
+      <button id="versionBtn" title="GitHub sürümünü denetle">v—</button>
+    </div>
+  </header>
+
+  <div class="statusline">
+    <span class="pill"><i class="dot" id="dot"></i><span id="stateText">bağlanıyor…</span></span>
+    <span id="fresh">veri yükleniyor…</span>
+    <span class="pill" id="soundPill" title="Uyarı sesi">🔔 ses açık</span>
+  </div>
+  <div id="banners"></div>
+
+  <div class="stats">
+    <div class="stat"><b id="sChests">—</b><span>Sandık</span></div>
+    <div class="stat"><b id="sStreams">—</b><span>Canlı yayın</span></div>
+    <div class="stat"><b id="sBest">—</b><span>En iyi oran</span></div>
+    <div class="stat"><b id="sSoon">—</b><span>En yakın açılış</span></div>
+    <div class="stat"><b id="sPoll">—</b><span>Veri tazeleme</span></div>
+  </div>
+
+  <div class="controls">
+    <div class="chips" id="chips"></div>
+    <input id="q" placeholder="Yayıncı ara" style="width:130px" autocomplete="off" />
+    <select id="sort">
+      <option value="opens_at">Açılış</option>
+      <option value="ratio">Oran</option>
+      <option value="coins">Jeton</option>
+      <option value="per_slot">Kişi başı</option>
+      <option value="slots">Kontenjan</option>
+      <option value="viewers">İzleyici</option>
+    </select>
+    <button id="dir">↓</button>
+    <button id="refresh">↻</button>
+  </div>
+  <div class="err" id="err"></div>
+  <div class="grid" id="grid"></div>
+
+  <h2>Canlı yayınlar</h2>
+  <div class="streams" id="streams"></div>
+
+  <h2>Son uyarılar</h2>
+  <div class="alerts" id="alerts"><div class="alert">Henüz uyarı yok. Yüksek oranlı sandık açılmadan önce burada ve Windows bildiriminde görünür.</div></div>
+
+  <footer>
+    Veri GitHub Actions taramasından gelir (yaklaşık 5 dakikada bir). Uygulama açılışta ve çalışırken GitHub sürümünü denetler.<br />
+    Otomatik jeton toplama TikTok tarafından sunulmaz; bu uygulama sandığı zamanında gösterip canlıya tek tıkla götürür.
+    <a href="#" id="repoLink">GitHub deposu</a>
+  </footer>
+</div>
+
+<dialog id="settingsDialog">
+  <form class="settings" id="settingsForm">
+    <h3>Radar ayarları</h3>
+    <p>Veri GitHub'dan çekilir. Daha sık tazeleme daha hızlı sandık bildirimi demektir.</p>
+    <div class="field"><span>Veri tazeleme (sn)</span><input type="number" id="pollSeconds" min="3" max="120" /></div>
+    <div class="field"><span>Uyarı için minimum oran</span><input type="number" id="alertRatio" min="1" max="100" step="0.5" /></div>
+    <div class="field"><span>Uyarı penceresi (sn)</span><input type="number" id="alertSeconds" min="30" max="1800" step="10" /></div>
+    <div class="field"><label><input type="checkbox" id="notifyDesktop" /> Windows bildirimi</label></div>
+    <div class="field"><label><input type="checkbox" id="sound" /> Uyarı sesi</label></div>
+    <div class="field"><label><input type="checkbox" id="autoUpdate" /> Güncellemeyi otomatik indir</label></div>
+    <div class="actions">
+      <button type="button" id="testAlert">Test bildirimi</button>
+      <button type="button" id="closeSettings">Kapat</button>
+      <button type="submit" class="primary">Kaydet</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  var D = {
+    fmt: function (n) {
+      n = Number(n) || 0;
+      if (n >= 1e6) return (n / 1e6).toFixed(1).replace(".0", "") + "M";
+      if (n >= 1e3) return (n / 1e3).toFixed(1).replace(".0", "") + "K";
+      return new Intl.NumberFormat("tr-TR").format(n);
+    },
+    esc: function (v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    },
+    left: function (chest) {
+      var at = Date.parse(chest && chest.opensAt ? chest.opensAt : "");
+      return Number.isFinite(at) ? Math.round((at - Date.now()) / 1000) : 0;
+    },
+    ratio: function (chest) {
+      var r = Number(chest && chest.ratio);
+      if (Number.isFinite(r) && r > 0) return r;
+      return Math.round((Number(chest.coins || 0) / Math.max(1, Number(chest.slots || 1))) * 100) / 100;
+    },
+    clock: function (s) {
+      s = Math.max(0, Math.round(s));
+      if (s < 60) return s + "s";
+      var m = Math.floor(s / 60);
+      if (m < 60) return m + ":" + String(s % 60).padStart(2, "0");
+      return Math.floor(m / 60) + "h" + String(s % 60).padStart(2, "0");
+    },
+    url: function (username) {
+      return "https://www.tiktok.com/@" + encodeURIComponent(String(username || "").replace(/^@+/, "")) + "/live";
+    },
+  };
+
+  var state = {
+    data: null,
+    filter: "all",
+    q: "",
+    sort: "opens_at",
+    desc: true,
+    alertCount: 0,
+    config: null,
+  };
+
+  var FILTERS = [
+    { id: "all", label: "Tümü", test: function () { return true; } },
+    { id: "ratio2", label: "≥ 2", test: function (c) { return D.ratio(c) >= 2; } },
+    { id: "ratio4", label: "≥ 4", test: function (c) { return D.ratio(c) >= 4; } },
+    { id: "kismet", label: "≥ 7", test: function (c) { return D.ratio(c) >= 7; } },
+    { id: "gold", label: "Altın", test: function (c) { return c.variant === "gold"; } },
+    { id: "bag", label: "Çanta", test: function (c) { return c.kind === "bag"; } },
+  ];
+
+  var grid = document.getElementById("grid");
+  var chips = document.getElementById("chips");
+  var qInput = document.getElementById("q");
+  var sortInput = document.getElementById("sort");
+  var dirBtn = document.getElementById("dir");
+
+  function chests() { return (state.data && state.data.snapshot && state.data.snapshot.chests) || []; }
+  function streams() { return (state.data && state.data.snapshot && state.data.snapshot.streams) || []; }
+
+  function renderChips() {
+    chips.innerHTML = "";
+    FILTERS.forEach(function (filter) {
+      var button = document.createElement("button");
+      button.textContent = filter.label;
+      if (state.filter === filter.id) button.className = "on";
+      button.onclick = function () { state.filter = filter.id; render(); };
+      chips.appendChild(button);
+    });
+  }
+
+  function sortRows(rows) {
+    var direction = state.desc ? 1 : -1;
+    var value = function (row) {
+      switch (state.sort) {
+        case "ratio": return D.ratio(row);
+        case "coins": return Number(row.coins || 0);
+        case "per_slot": return Number(row.coins || 0) / Math.max(1, Number(row.slots || 1));
+        case "slots": return Number(row.slots || 0);
+        case "viewers": return Number(row.viewers || 0);
+        default: return D.left(row);
+      }
+    };
+    return rows.slice().sort(function (a, b) { return (value(a) - value(b)) * direction; });
+  }
+
+  function chestCard(chest) {
+    var left = D.left(chest);
+    var detected = Date.parse(chest.detectedAt || "");
+    var fresh = Number.isFinite(detected) && Date.now() - detected < 150000;
+    var card = document.createElement("div");
+    card.className = "card" + (left <= 0 ? " open" : "") + (chest.variant === "gold" ? " gold" : "") +
+      (chest.variant === "hanging" ? " hanging" : "") + (fresh ? " fresh" : "");
+    var color = left <= 0 ? "#ff3b5c" : left <= 30 ? "#ffa62b" : "#2ee6a8";
+    var opens = Number.isFinite(Date.parse(chest.opensAt || ""))
+      ? new Date(chest.opensAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+      : "";
+    card.innerHTML =
+      '<div class="row"><div style="min-width:0"><div class="who">@' + D.esc(chest.username) + '</div>' +
+      '<div class="sub">' + D.esc(chest.title || (chest.kind === "bag" ? "çanta" : chest.variant)) + '</div></div>' +
+      '<div class="timer" style="color:' + color + '">' + (left > 0 ? D.clock(left) : "AÇIK") +
+      '<small>' + (left > 0 ? opens + " açılış" : "katıl") + '</small></div></div>' +
+      '<div class="metrics"><div class="m"><b>' + D.fmt(chest.coins) + '</b><span>Jeton</span></div>' +
+      '<div class="m"><b style="color:#9df9f5">' + D.ratio(chest) + '</b><span>Oran</span></div>' +
+      '<div class="m"><b>' + D.fmt(chest.slots) + '</b><span>Kontenjan</span></div></div>' +
+      '<a class="open-live" target="_blank" rel="noreferrer" href="' +
+      D.esc(chest.openUrl || D.url(chest.username)) + '">Canlıya gir · jetonu topla</a>';
+    return card;
+  }
+
+  function renderStreams() {
+    var el = document.getElementById("streams");
+    var rows = streams();
+    el.innerHTML = "";
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty">Henüz doğrulanmış canlı yayın yok.</div>';
+      return;
+    }
+    rows.slice(0, 10).forEach(function (stream) {
+      var row = document.createElement("div");
+      row.className = "stream";
+      row.innerHTML =
+        '<div style="min-width:0"><div class="who">@' + D.esc(stream.username) + ' <span class="live-tag">CANLI</span></div>' +
+        '<div class="sub">' + D.esc(stream.title || "yayın") + ' · ' + D.fmt(stream.viewers) + ' izleyici</div></div>' +
+        '<a target="_blank" rel="noreferrer" href="' + D.esc(stream.openUrl || D.url(stream.username)) + '">Aç ↗</a>';
+      el.appendChild(row);
+    });
+  }
+
+  function renderAlerts() {
+    var el = document.getElementById("alerts");
+    var rows = (state.data && state.data.alerts) || [];
+    if (!rows.length) {
+      el.innerHTML = '<div class="alert">Henüz uyarı yok. Yüksek oranlı sandık açılmadan önce burada ve Windows bildiriminde görünür.</div>';
+      return;
+    }
+    el.innerHTML = "";
+    rows.slice().reverse().forEach(function (alert) {
+      var row = document.createElement("div");
+      row.className = "alert";
+      row.innerHTML = '<b>' + D.esc(alert.title) + '</b> · ' + D.esc(alert.message) + ' · ' +
+        new Date(alert.at).toLocaleTimeString("tr-TR");
+      el.appendChild(row);
+    });
+  }
+
+  function render() {
+    var data = state.data;
+    if (!data) return;
+    renderChips();
+    var query = state.q.trim().toLowerCase();
+    var filter = FILTERS.find(function (item) { return item.id === state.filter; }) || FILTERS[0];
+    var rows = chests().filter(function (chest) {
+      if (!filter.test(chest)) return false;
+      if (!query) return true;
+      return String((chest.username || "") + " " + (chest.title || "") + " " + (chest.nickname || "")).toLowerCase().indexOf(query) >= 0;
+    });
+    rows = sortRows(rows);
+
+    grid.innerHTML = "";
+    if (!rows.length) {
+      grid.innerHTML = '<div class="empty"><b>Bu filtrede sandık yok</b>Yeni sandık bulunduğunda otomatik görünür ve bildirim gelir.</div>';
+    } else {
+      rows.forEach(function (chest) { grid.appendChild(chestCard(chest)); });
+    }
+
+    var all = chests();
+    var best = all.reduce(function (max, chest) { return Math.max(max, D.ratio(chest)); }, 0);
+    var soon = all.reduce(function (min, chest) {
+      var left = D.left(chest);
+      return left > 0 && left < min ? left : min;
+    }, Infinity);
+    document.getElementById("sChests").textContent = D.fmt(all.length);
+    document.getElementById("sStreams").textContent = D.fmt(streams().length);
+    document.getElementById("sBest").textContent = best ? best + "×" : "—";
+    document.getElementById("sSoon").textContent = Number.isFinite(soon) ? D.clock(soon) : "—";
+    document.getElementById("sPoll").textContent = (data.config ? data.config.pollSeconds : 5) + " sn";
+
+    renderStreams();
+    renderAlerts();
+
+    var age = data.dataAgeSeconds;
+    var dot = document.getElementById("dot");
+    var stale = age != null && age > 900;
+    dot.className = "dot" + (data.lastError ? " bad" : stale ? " warn" : "");
+    document.getElementById("stateText").textContent = data.lastError ? "bağlantı sorunu" : stale ? "veri gecikti" : "canlı tarama açık";
+    document.getElementById("fresh").textContent = data.snapshot && data.snapshot.generatedAt
+      ? "son tarama " + (age < 90 ? age + " sn" : Math.round(age / 60) + " dk") + " önce · " +
+        new Date(data.snapshot.generatedAt).toLocaleTimeString("tr-TR")
+      : "ilk GitHub taraması bekleniyor…";
+    document.getElementById("err").textContent = data.lastError ? "Veri alınamadı: " + data.lastError : "";
+    document.getElementById("soundPill").textContent = data.config && data.config.sound ? "🔔 ses açık" : "🔕 ses kapalı";
+
+    var banners = document.getElementById("banners");
+    banners.innerHTML = "";
+    var update = data.update || {};
+    if (update.installing) {
+      banners.innerHTML = '<div class="banner">Güncelleme uygulanıyor… Uygulama yeniden başlayacak.</div>';
+    } else if (update.ready) {
+      banners.innerHTML = '<div class="banner">Yeni sürüm indirildi: v' + D.esc(update.latest) +
+        ' <button id="applyUpdate" class="primary">Güncelle ve yeniden başlat</button></div>';
+      document.getElementById("applyUpdate").onclick = applyUpdate;
+    } else if (update.available) {
+      banners.innerHTML = '<div class="banner">Yeni sürüm mevcut: v' + D.esc(update.latest) +
+        ' <button id="downloadUpdate">İndir</button></div>';
+      document.getElementById("downloadUpdate").onclick = function () {
+        fetch("/api/update/check", { method: "POST" }).then(function () { return refresh(); });
+      };
+    } else if (stale) {
+      banners.innerHTML = '<div class="banner warn">GitHub taraması 15 dakikadır güncellenmedi. Veri son hâliyle gösteriliyor.</div>';
+    }
+
+    document.getElementById("versionBtn").textContent = "v" + (data.app ? data.app.version : "—");
+
+    if (data.alerts && data.alerts.length > state.alertCount && state.alertCount > 0) {
+      if (data.config && data.config.sound) beep();
+    }
+    state.alertCount = data.alerts ? data.alerts.length : 0;
+    if (data.config) {
+      state.config = data.config;
+      document.querySelectorAll("#settingsForm input").forEach(function (input) {
+        if (!input.id) return;
+        var value = data.config[input.id];
+        if (input.type === "checkbox") input.checked = Boolean(value);
+        else if (value !== undefined) input.value = value;
+      });
+    }
+  }
+
+  var audioContext = null;
+  function beep() {
+    try {
+      audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+      var oscillator = audioContext.createOscillator();
+      var gain = audioContext.createGain();
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.frequency.value = 880;
+      gain.gain.value = 0.08;
+      oscillator.start();
+      setTimeout(function () { oscillator.stop(); }, 260);
+    } catch (error) { /* ses desteklenmiyor */ }
+  }
+
+  async function refresh() {
+    try {
+      var response = await fetch("/api/state", { cache: "no-store" });
+      state.data = await response.json();
+      render();
+    } catch (error) {
+      document.getElementById("err").textContent = "Yerel servise bağlanılamadı: " + error.message;
+    }
+  }
+
+  async function applyUpdate() {
+    var response = await fetch("/api/update/apply", { method: "POST" });
+    var data = await response.json();
+    if (!data.ok) alert(data.error || "Güncelleme uygulanamadı.");
+    else document.getElementById("banners").innerHTML = '<div class="banner">Güncelleme başlatıldı…</div>';
+  }
+
+  document.getElementById("settingsBtn").onclick = function () {
+    document.getElementById("settingsDialog").showModal();
+  };
+  document.getElementById("closeSettings").onclick = function () {
+    document.getElementById("settingsDialog").close();
+  };
+  document.getElementById("testAlert").onclick = function () {
+    fetch("/api/test-alert", { method: "POST" });
+    if (state.data && state.data.config && state.data.config.sound) beep();
+  };
+  document.getElementById("settingsForm").onsubmit = async function (event) {
+    event.preventDefault();
+    var body = {
+      pollSeconds: Number(document.getElementById("pollSeconds").value),
+      alertRatio: Number(document.getElementById("alertRatio").value),
+      alertSeconds: Number(document.getElementById("alertSeconds").value),
+      notifyDesktop: document.getElementById("notifyDesktop").checked,
+      sound: document.getElementById("sound").checked,
+      autoUpdate: document.getElementById("autoUpdate").checked,
+    };
+    await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    document.getElementById("settingsDialog").close();
+    refresh();
+  };
+  document.getElementById("versionBtn").onclick = async function () {
+    var response = await fetch("/api/update/check", { method: "POST" });
+    var update = await response.json();
+    if (update.error) alert("Sürüm denetlenemedi: " + update.error);
+    else if (update.available) alert("Yeni sürüm: v" + update.latest + (update.ready ? " (indirildi)" : ""));
+    else alert("En son sürümü kullanıyorsun: v" + update.current);
+    refresh();
+  };
+  document.getElementById("refresh").onclick = function () {
+    fetch("/api/refresh", { method: "POST" }).then(refresh);
+  };
+  document.getElementById("openWeb").onclick = function () {
+    fetch("/api/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: "https://cehennemgibiyim.github.io/ArenaSag/sandik.html" }) });
+  };
+  document.getElementById("repoLink").onclick = function (event) {
+    event.preventDefault();
+    fetch("/api/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: "https://github.com/CehennemGibiyim/ArenaSag" }) });
+  };
+  qInput.addEventListener("input", function () { state.q = qInput.value; render(); });
+  sortInput.addEventListener("change", function () { state.sort = sortInput.value; render(); });
+  dirBtn.addEventListener("click", function () {
+    state.desc = !state.desc;
+    dirBtn.textContent = state.desc ? "↓" : "↑";
+    render();
+  });
+
+  refresh();
+  setInterval(refresh, 2000);
+  setInterval(function () {
+    if (!state.data) return;
+    document.querySelectorAll(".card .timer").forEach(function () { /* kart zamanlayıcıları render ile tazelenir */ });
+    render();
+  }, 1000);
+</script>
+</body>
+</html>

@@ -1,66 +1,119 @@
-name: Windows Release
+name: Windows Radar Release
+
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    paths:
+      - "desktop/**"
+      - "scripts/installer.nsi"
+      - "scripts/build-radar-package.mjs"
+      - "scripts/windows/**"
+      - ".github/workflows/windows-release.yml"
+      - "version.json"
+  tags: ["v*"]
   workflow_dispatch:
+
 permissions:
   contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
 jobs:
   package:
     runs-on: windows-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: app_db
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/app_db
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx drizzle-kit push
-      - run: npm run build
-      - name: Windows paketini oluştur
+          node-version: "22"
+
+      - name: Sürümü oku
+        id: version
         shell: pwsh
         run: |
           $version = (Get-Content version.json -Raw | ConvertFrom-Json).version
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Arena Radar $version"
+
+      - name: Gömülü Node kopyala
+        shell: pwsh
+        run: Copy-Item (Get-Command node).Source -Destination node.exe
+
+      - name: Windows paketini hazırla
+        run: node scripts/build-radar-package.mjs --node-exe node.exe
+
+      - name: NSIS kur
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+
+      - name: Kurulum paketini üret
+        shell: pwsh
+        run: |
+          $nsis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $nsis)) { $nsis = (Get-Command makensis).Source }
+          & $nsis "/DAPPVERSION=${{ steps.version.outputs.version }}" "scripts\installer.nsi"
+          if ($LASTEXITCODE -ne 0) { throw "NSIS kurulum paketi üretilemedi." }
+          Copy-Item "release\ArenaRadar-Setup-${{ steps.version.outputs.version }}.exe" "release\ArenaRadar-Setup.exe" -Force
+          Get-Item "release\ArenaRadar-Setup*.exe" | Select-Object Name, Length
+
+      - name: Taşınabilir zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "release\radar\*" -DestinationPath "release\ArenaRadar-windows.zip" -Force
+
+      - name: Tam kaynak zip (panel dahil)
+        shell: pwsh
+        run: |
           $stage = Join-Path $env:TEMP "Arena-Live-OS-windows"
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           New-Item -ItemType Directory -Path $stage | Out-Null
-          $dirs = @("src","public","scripts","docs","web",".github","agent",".next")
+          $dirs = @("src","public","scripts","docs","web",".github","agent","desktop")
           foreach ($d in $dirs) { if (Test-Path $d) { Copy-Item $d (Join-Path $stage $d) -Recurse -Force } }
           $files = @("package.json","package-lock.json","tsconfig.json","next.config.ts","postcss.config.mjs","eslint.config.mjs","drizzle.config.json",".env.example","KURULUM.bat","Arena-Live-OS.bat","Arena-Update.bat","Durdur.bat","README.md","version.json")
           foreach ($f in $files) { if (Test-Path $f) { Copy-Item $f (Join-Path $stage $f) -Force } }
-          $zip = "Arena-Live-OS-windows.zip"
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -Force
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $zip" | Out-File -Encoding ascii SHA256SUMS.txt
-          Get-Item $zip, SHA256SUMS.txt | Select-Object Name,Length
-      - uses: actions/upload-artifact@v4
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath "release\Arena-Live-OS-windows.zip" -Force
+
+      - name: SHA256
+        shell: pwsh
+        run: |
+          $lines = @()
+          Get-ChildItem "release" -Filter "*.exe" | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $lines += "$hash  $($_.Name)"
+          }
+          Get-ChildItem "release" -Filter "*.zip" | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $lines += "$hash  $($_.Name)"
+          }
+          $lines | Out-File -Encoding ascii "release\SHA256SUMS.txt"
+          Get-Content "release\SHA256SUMS.txt"
+
+      - name: Artifact yükle
+        uses: actions/upload-artifact@v4
         with:
-          name: Arena-Live-OS-windows
+          name: Arena-Radar-Windows
           path: |
-            Arena-Live-OS-windows.zip
-            SHA256SUMS.txt
+            release/ArenaRadar-Setup*.exe
+            release/ArenaRadar-windows.zip
+            release/Arena-Live-OS-windows.zip
+            release/SHA256SUMS.txt
+
       - name: GitHub Release yayınla
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            Arena-Live-OS-windows.zip
-            SHA256SUMS.txt
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Arena Radar v${{ steps.version.outputs.version }}
+          make_latest: true
           generate_release_notes: true
+          files: |
+            release/ArenaRadar-Setup.exe
+            release/ArenaRadar-Setup-${{ steps.version.outputs.version }}.exe
+            release/ArenaRadar-windows.zip
+            release/Arena-Live-OS-windows.zip
+            release/SHA256SUMS.txt
