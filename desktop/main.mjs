@@ -50,6 +50,8 @@ const DEFAULTS = {
   pollSeconds: 5,
   alertRatio: 7,
   alertSeconds: 180,
+  roomScanSeconds: 20,
+  roomScanLimit: 8,
   notifyDesktop: true,
   sound: true,
   autoUpdate: true,
@@ -125,6 +127,8 @@ let source = "";
 let lastFetchAt = 0;
 let lastError = "";
 let alerts = [];
+const localChests = new Map();
+let roomScanTimer;
 let alerted = loadAlerted();
 let seeded = alerted.size > 0;
 let pollTimer;
@@ -144,6 +148,48 @@ let updateState = {
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
+
+function integer(value) {
+  const n = typeof value === "string" && value.trim() ? Number(value) : value;
+  return typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
+}
+
+function timestampSeconds(value) {
+  const raw = typeof value === "string" ? Number(value) : value;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return 0;
+  const ms = raw < 1e12 ? raw * 1000 : raw;
+  if (ms < Date.now() - 6 * 3_600_000 || ms > Date.now() + 24 * 3_600_000) return 0;
+  return Math.floor(ms / 1000);
+}
+
+/** room/info yanıtındaki açık zarf alanlarını okur; tahmin üretmez. */
+function roomRewards(data, roomId) {
+  const rewards = [];
+  for (const key of ["envelopeInfo", "envelope_info", "envelopeList", "envelope_list"]) {
+    const value = data[key];
+    const entries = Array.isArray(value) ? value.slice(0, 20) : value ? [value] : [];
+    for (const entry of entries) {
+      const info = entry && typeof entry === "object" ? (entry.envelopeInfo || entry.envelope_info || entry) : null;
+      if (!info) continue;
+      const envelopeId = info.envelopeId || info.envelope_id;
+      const coins = integer(info.diamondCount ?? info.diamond_count);
+      const slots = integer(info.peopleCount ?? info.people_count);
+      const opens = timestampSeconds(info.unpackAt ?? info.unpack_at);
+      if (!envelopeId || !coins || !slots || !opens) continue;
+      rewards.push({ envelopeId: String(envelopeId), coins, slots, opensAt: new Date(opens * 1000).toISOString(), skinId: integer(info.skinId ?? info.skin_id) || 1 });
+    }
+  }
+  return rewards;
+}
+
+function variantOf(skinId) {
+  if (Number(skinId) === 0) return { kind: "bag", variant: "l0" };
+  if (Number(skinId) === 2) return { kind: "chest", variant: "gold" };
+  if (Number(skinId) === 3) return { kind: "chest", variant: "hanging" };
+  return { kind: "chest", variant: "normal" };
+}
 
 async function getJson(url, timeout = 9000) {
   const response = await fetch(url, {
@@ -185,6 +231,26 @@ function notifyDesktop(title, message) {
   log("BİLDİRİM:", title, "-", message);
 }
 
+function processChests(chests, options = {}) {
+  let fresh = 0;
+  for (const chest of chests) {
+    const id = chest && chest.envelopeId;
+    if (!id || alerted.has(id)) continue;
+    alerted.add(id);
+    if (options.seedOnly) continue;
+    const left = secondsLeft(chest);
+    const ratio = ratioOf(chest);
+    const inWindow = left > -30 && (options.immediate ? true : left <= Number(config.alertSeconds || 180));
+    if (ratio >= Number(config.alertRatio || 7) && inWindow) {
+      raiseAlert(chest);
+      fresh += 1;
+    }
+  }
+  if (fresh) saveAlerted();
+  else if (alerted.size > 2500) saveAlerted();
+  return fresh;
+}
+
 function raiseAlert(chest) {
   const left = secondsLeft(chest);
   const when = left <= 0 ? "şimdi açık" : left < 120 ? `${left} sn sonra` : `${Math.round(left / 60)} dk sonra`;
@@ -215,22 +281,10 @@ async function fetchSnapshot() {
       lastError = "";
       const chests = Array.isArray(data.chests) ? data.chests : [];
       if (!seeded) {
-        for (const chest of chests) alerted.add(chest.envelopeId);
         seeded = true;
-        saveAlerted();
+        processChests(chests, { seedOnly: true });
       } else {
-        let fresh = 0;
-        for (const chest of chests) {
-          if (!chest || !chest.envelopeId || alerted.has(chest.envelopeId)) continue;
-          alerted.add(chest.envelopeId);
-          const left = secondsLeft(chest);
-          if (ratioOf(chest) >= Number(config.alertRatio || 7) && left <= Number(config.alertSeconds || 180) && left > -30) {
-            raiseAlert(chest);
-            fresh += 1;
-          }
-        }
-        if (fresh) saveAlerted();
-        else if (alerted.size > 2500) saveAlerted();
+        processChests(chests);
       }
       if (firstLoad) log(`veri alındı: ${data.stats ? data.stats.live : 0} yayın · ${chests.length} sandık`);
       return;
@@ -239,6 +293,87 @@ async function fetchSnapshot() {
     }
   }
   lastError = lastFailure || "Veri alınamadı";
+}
+
+async function mapLimit(items, limit, fn) {
+  let index = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (index < items.length) await fn(items[index++]);
+    }),
+  );
+}
+
+/** GitHub taramasını beklemeden canlı odaların zarf bilgisini kendi IP'mizden yoklar. */
+async function scanRooms() {
+  if (!snapshot || !Array.isArray(snapshot.streams)) return;
+  const limit = Math.max(1, Math.min(20, Number(config.roomScanLimit) || 8));
+  const streams = snapshot.streams.filter((stream) => stream && stream.roomId).slice(0, limit);
+  const now = Date.now();
+  for (const [id, chest] of localChests) {
+    const opens = Date.parse(chest.opensAt || "");
+    if (Number.isFinite(opens) && opens < now - 10 * 60_000) localChests.delete(id);
+  }
+  await mapLimit(streams, 2, async (stream) => {
+    try {
+      const url = `https://webcast.tiktok.com/webcast/room/info/?aid=1988&room_id=${encodeURIComponent(stream.roomId)}`;
+      const response = await fetch(url, {
+        headers: { "User-Agent": UA, Accept: "application/json", Referer: "https://www.tiktok.com/live" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const data = payload && payload.data ? payload.data : {};
+      for (const reward of roomRewards(data, stream.roomId)) {
+        const left = Math.round((Date.parse(reward.opensAt) - Date.now()) / 1000);
+        if (left < -90 || left > 24 * 60 * 60) continue;
+        const kind = variantOf(reward.skinId);
+        const chest = {
+          envelopeId: reward.envelopeId,
+          kind: kind.kind,
+          variant: kind.variant,
+          skinId: reward.skinId,
+          username: stream.username,
+          nickname: stream.nickname,
+          title: stream.title,
+          roomId: stream.roomId,
+          coins: reward.coins,
+          slots: reward.slots,
+          ratio: Math.round((reward.coins / Math.max(1, reward.slots)) * 100) / 100,
+          viewers: stream.viewers,
+          opensAt: reward.opensAt,
+          detectedAt: localChests.get(reward.envelopeId)?.detectedAt || new Date().toISOString(),
+          openUrl: stream.openUrl || `https://www.tiktok.com/@${stream.username}/live`,
+        };
+        const known = localChests.has(reward.envelopeId);
+        localChests.set(reward.envelopeId, chest);
+        if (!known && processChests([chest], { immediate: true })) {
+          log(`yerel sandık: @${stream.username} · ${chest.coins} jeton / ${chest.slots} kişi`);
+        }
+      }
+    } catch {
+      /* oda bilgisi alınamadı; sonraki turda tekrar denenir */
+    }
+  });
+}
+
+function scheduleRoomScan() {
+  clearTimeout(roomScanTimer);
+  const seconds = Math.max(10, Math.min(300, Number(config.roomScanSeconds) || 20));
+  roomScanTimer = setTimeout(async () => {
+    await scanRooms();
+    scheduleRoomScan();
+  }, seconds * 1000);
+}
+
+function mergedChests() {
+  const map = new Map();
+  for (const chest of (snapshot && snapshot.chests) || []) {
+    if (chest && chest.envelopeId) map.set(chest.envelopeId, chest);
+  }
+  for (const chest of localChests.values()) map.set(chest.envelopeId, chest);
+  return [...map.values()].sort((a, b) => Date.parse(a.opensAt || 0) - Date.parse(b.opensAt || 0));
 }
 
 function schedulePoll() {
@@ -356,19 +491,22 @@ async function applyUpdate() {
 
 function statePayload() {
   const generated = snapshot && snapshot.generatedAt ? Date.parse(snapshot.generatedAt) : NaN;
+  const chests = mergedChests();
   return {
     app: { name: APP.name, version: APP.version, port: config.port, stateDir: STATE_DIR },
     config: {
       pollSeconds: config.pollSeconds,
       alertRatio: config.alertRatio,
       alertSeconds: config.alertSeconds,
+      roomScanSeconds: config.roomScanSeconds,
+      roomScanLimit: config.roomScanLimit,
       notifyDesktop: config.notifyDesktop,
       sound: config.sound,
       autoUpdate: config.autoUpdate,
       repo: config.repo,
       pagesUrl: config.pagesUrl,
     },
-    snapshot,
+    snapshot: snapshot ? { ...snapshot, chests, stats: { ...(snapshot.stats || {}), chests: chests.length } } : null,
     source,
     lastFetchAt,
     lastError,
@@ -422,18 +560,21 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/config") {
       const body = await readBody(req);
       const next = { ...config };
-      for (const key of ["pollSeconds", "alertRatio", "alertSeconds", "port"]) {
+      for (const key of ["pollSeconds", "alertRatio", "alertSeconds", "roomScanSeconds", "roomScanLimit", "port"]) {
         if (body[key] !== undefined && Number.isFinite(Number(body[key]))) next[key] = Number(body[key]);
       }
       next.pollSeconds = Math.max(3, Math.min(120, next.pollSeconds));
       next.alertSeconds = Math.max(30, Math.min(1800, next.alertSeconds));
       next.alertRatio = Math.max(1, Math.min(100, next.alertRatio));
+      next.roomScanSeconds = Math.max(10, Math.min(300, next.roomScanSeconds));
+      next.roomScanLimit = Math.max(1, Math.min(20, next.roomScanLimit));
       for (const key of ["notifyDesktop", "sound", "autoUpdate", "openBrowser"]) {
         if (typeof body[key] === "boolean") next[key] = body[key];
       }
       Object.assign(config, next);
       saveConfig(config);
       schedulePoll();
+      scheduleRoomScan();
       json(res, 200, statePayload());
       return;
     }
@@ -508,6 +649,8 @@ async function main() {
 
   await fetchSnapshot();
   schedulePoll();
+  void scanRooms();
+  scheduleRoomScan();
   void checkRemoteVersion();
   void checkUpdate(true);
   scheduleUpdateChecks();

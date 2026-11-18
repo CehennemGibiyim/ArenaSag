@@ -102,6 +102,7 @@ node desktop\main.mjs
 | --- | --- |
 | Veri kaynağı | Önce `raw.githubusercontent.com`, sonra GitHub Pages |
 | Tazeleme | Varsayılan 5 sn (3–120 sn arası ayarlanabilir) |
+| Yerel sandık taraması | Canlı odaların zarf bilgisi 20 sn'de bir doğrudan TikTok'tan okunur (GitHub turunu beklemez) |
 | Bildirim | Oran eşiği + açılış penceresi; Windows balon bildirimi |
 | Güncelleme | Açılışta ve 10 dakikada bir GitHub Release denetimi; otomatik indirme |
 | Değişiklik algılama | `version.json` her 60 sn, veri her 5 sn |

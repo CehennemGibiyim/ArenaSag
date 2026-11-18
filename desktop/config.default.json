@@ -8,6 +8,8 @@
   "pollSeconds": 5,
   "alertRatio": 7,
   "alertSeconds": 180,
+  "roomScanSeconds": 20,
+  "roomScanLimit": 8,
   "notifyDesktop": true,
   "sound": true,
   "autoUpdate": true,

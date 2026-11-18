@@ -137,6 +137,8 @@
     <div class="field"><span>Veri tazeleme (sn)</span><input type="number" id="pollSeconds" min="3" max="120" /></div>
     <div class="field"><span>Uyarı için minimum oran</span><input type="number" id="alertRatio" min="1" max="100" step="0.5" /></div>
     <div class="field"><span>Uyarı penceresi (sn)</span><input type="number" id="alertSeconds" min="30" max="1800" step="10" /></div>
+    <div class="field"><span>Yerel oda taraması (sn)</span><input type="number" id="roomScanSeconds" min="10" max="300" step="5" /></div>
+    <div class="field"><span>Taranacak canlı oda</span><input type="number" id="roomScanLimit" min="1" max="20" /></div>
     <div class="field"><label><input type="checkbox" id="notifyDesktop" /> Windows bildirimi</label></div>
     <div class="field"><label><input type="checkbox" id="sound" /> Uyarı sesi</label></div>
     <div class="field"><label><input type="checkbox" id="autoUpdate" /> Güncellemeyi otomatik indir</label></div>
@@ -427,6 +429,8 @@
       pollSeconds: Number(document.getElementById("pollSeconds").value),
       alertRatio: Number(document.getElementById("alertRatio").value),
       alertSeconds: Number(document.getElementById("alertSeconds").value),
+      roomScanSeconds: Number(document.getElementById("roomScanSeconds").value),
+      roomScanLimit: Number(document.getElementById("roomScanLimit").value),
       notifyDesktop: document.getElementById("notifyDesktop").checked,
       sound: document.getElementById("sound").checked,
       autoUpdate: document.getElementById("autoUpdate").checked,
