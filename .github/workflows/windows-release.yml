@@ -3,6 +3,7 @@ name: Windows Radar Release
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "desktop/**"
       - "scripts/installer.nsi"
@@ -10,7 +11,6 @@ on:
       - "scripts/windows/**"
       - ".github/workflows/windows-release.yml"
       - "version.json"
-  tags: ["v*"]
   workflow_dispatch:
 
 permissions:
