@@ -56,8 +56,12 @@ jobs:
         run: |
           $nsis = "C:\Program Files (x86)\NSIS\makensis.exe"
           if (-not (Test-Path $nsis)) { $nsis = (Get-Command makensis).Source }
-          & $nsis "/DAPPVERSION=${{ steps.version.outputs.version }}" "scripts\installer.nsi"
-          if ($LASTEXITCODE -ne 0) { throw "NSIS kurulum paketi üretilemedi." }
+          $root = (Get-Location).Path
+          & $nsis "/DPROJECTROOT=$root" "/DAPPVERSION=${{ steps.version.outputs.version }}" "scripts\installer.nsi" 2>&1 | Tee-Object -FilePath nsis-build.log
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "release\ArenaRadar-Setup-${{ steps.version.outputs.version }}.exe")) {
+            Get-Content nsis-build.log | ForEach-Object { Write-Host "::error::$_" }
+            throw "NSIS kurulum paketi üretilemedi."
+          }
           Copy-Item "release\ArenaRadar-Setup-${{ steps.version.outputs.version }}.exe" "release\ArenaRadar-Setup.exe" -Force
           Get-Item "release\ArenaRadar-Setup*.exe" | Select-Object Name, Length
 

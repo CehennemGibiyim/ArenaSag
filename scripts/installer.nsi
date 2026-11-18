@@ -6,13 +6,16 @@ Unicode true
 !ifndef APPVERSION
   !define APPVERSION "1.3.0"
 !endif
+!ifndef PROJECTROOT
+  !define PROJECTROOT "."
+!endif
 
 !define APPNAME "Arena Radar"
 !define APPEXE "ArenaRadar.bat"
 !define REGKEY "Software\ArenaRadar"
 
 Name "${APPNAME}"
-OutFile "release\ArenaRadar-Setup-${APPVERSION}.exe"
+OutFile "${PROJECTROOT}\release\ArenaRadar-Setup-${APPVERSION}.exe"
 InstallDir "$LOCALAPPDATA\Programs\Arena Radar"
 InstallDirRegKey HKCU "${REGKEY}" "InstallDir"
 RequestExecutionLevel user
@@ -48,7 +51,7 @@ Section "Arena Radar" SEC01
     ${EndIf}
   ${EndIf}
 
-  File /r "release\radar\*.*"
+  File /r "${PROJECTROOT}\release\radar\*.*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   WriteRegStr HKCU "${REGKEY}" "InstallDir" "$INSTDIR"
