@@ -1,12 +1,14 @@
 import { upsertLiveRoom, type RoomUpsert } from "@/server/rooms";
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { listenerJobs, liveRooms, providerGates, type ListenerJob } from "@/db/schema";
+import { chests, listenerJobs, liveRooms, providerGates, type ListenerJob } from "@/db/schema";
 import { cleanHandle, roomKey, type QuotaSample } from "@/lib/discovery-model";
 import { nextStart } from "@/server/listener-policy";
 
 const LEASE_MS = 60_000;
+// One in five listener starts is reserved for a room that has never been listened to; the rest are yield.
+const EXPLORATION_EVERY = 5;
 export const leaseEnd = () => new Date(Date.now() + LEASE_MS);
 export const LEASE_STATES = ["connecting", "listening"];
 export const owned = (job: ListenerJob) => and(eq(listenerJobs.id, job.id), eq(listenerJobs.owner, job.owner), gt(listenerJobs.leaseUntil, new Date()));
@@ -23,7 +25,7 @@ export async function enqueue(input: RoomUpsert & { roomId: string; username: st
     const values = { roomId, username, nickname: input.nickname, title: input.title, viewers: input.viewers };
     const [created] = await tx.insert(listenerJobs).values(values).onConflictDoNothing({ target: listenerJobs.roomId }).returning({ id: listenerJobs.id });
     if (created) return { newRoom: true, firstHost: !priorHost };
-    // Reverification never bypasses backoff or steals a connecting/listening lease.
+    // Reverification never bypasses backoff or steals a lease.
     await tx.update(listenerJobs).set({ ...values, updatedAt: new Date(),
       status: sql`case when ${listenerJobs.status} = 'offline' then 'queued' else ${listenerJobs.status} end`,
       nextAttemptAt: sql`case when ${listenerJobs.status} = 'offline' then now() else ${listenerJobs.nextAttemptAt} end` }).where(eq(listenerJobs.roomId, roomId));
@@ -45,11 +47,34 @@ export async function claimRoom(capacity: number, quota?: QuotaSample | null): P
     const [active] = await tx.select({ n: sql<number>`count(*)::int` }).from(listenerJobs)
       .where(and(inArray(listenerJobs.status, LEASE_STATES), gt(listenerJobs.leaseUntil, new Date(now))));
     if (active.n >= capacity) return null;
-    const [candidate] = await tx.select({ id: listenerJobs.id }).from(listenerJobs)
-      .innerJoin(liveRooms, and(eq(liveRooms.roomId, listenerJobs.roomId), eq(liveRooms.username, listenerJobs.username)))
-      .where(and(freshRoom, sql`${listenerJobs.nextAttemptAt} <= now()`,
-        sql`(${listenerJobs.status} in ('queued','retry') or (${listenerJobs.status} in ('connecting','listening') and coalesce(${listenerJobs.leaseUntil}, now()) <= now()))`))
-      .orderBy(asc(listenerJobs.nextAttemptAt), asc(listenerJobs.id)).limit(1).for("update", { of: listenerJobs, skipLocked: true });
+    // Chest-per-listened-minute is the primary order. A room needs at least two listened minutes
+    // before its ratio is used, so one lucky short session cannot dominate.
+    const yieldScore = sql`case when ${listenerJobs.listenedSeconds} >= 120 then
+      coalesce((select count(*)::int from ${chests} where ${chests.username} = ${listenerJobs.username}
+        and ${chests.detectedAt} > now() - interval '24 hours'), 0) * 60.0 / ${listenerJobs.listenedSeconds}
+      else 0 end`;
+    const due = and(freshRoom, sql`${listenerJobs.nextAttemptAt} <= now()`,
+      sql`(${listenerJobs.status} in ('queued','retry') or (${listenerJobs.status} in ('connecting','listening') and coalesce(${listenerJobs.leaseUntil}, now()) <= now()))`);
+    // A bounded exploration slot keeps never-listened rooms from starving the yield leaders; in every
+    // other slot the yield order is used, so exploration can never dominate capacity.
+    const explorationSlot = budget.active.length % EXPLORATION_EVERY === 0;
+    let candidate: { id: number } | undefined;
+    if (explorationSlot) {
+      [candidate] = await tx.select({ id: listenerJobs.id }).from(listenerJobs)
+        .innerJoin(liveRooms, and(eq(liveRooms.roomId, listenerJobs.roomId), eq(liveRooms.username, listenerJobs.username)))
+        .where(and(due, eq(listenerJobs.listenedSeconds, 0)))
+        // Never-listened rooms rotate oldest-first; yield already leads the other slots.
+        .orderBy(asc(listenerJobs.nextAttemptAt), asc(listenerJobs.id))
+        .limit(1).for("update", { of: listenerJobs, skipLocked: true });
+    }
+    if (!candidate) {
+      [candidate] = await tx.select({ id: listenerJobs.id }).from(listenerJobs)
+        .innerJoin(liveRooms, and(eq(liveRooms.roomId, listenerJobs.roomId), eq(liveRooms.username, listenerJobs.username)))
+        .where(due)
+        // Pure yield outside the reserved exploration slot.
+        .orderBy(desc(yieldScore), asc(listenerJobs.nextAttemptAt), asc(listenerJobs.id))
+        .limit(1).for("update", { of: listenerJobs, skipLocked: true });
+    }
     if (!candidate) return null;
     // Space starts across replicas, without tearing down healthy sockets.
     const next = new Date(now + 20_500);

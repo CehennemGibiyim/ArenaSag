@@ -1,7 +1,7 @@
 # Arena Web Library — GitHub Radar + overlay kütüphanesi
 
 Bu klasör GitHub Pages'e olduğu gibi yayınlanır. Ana sayfa ve sandık radarı, GitHub Actions'ın
-`data/arena-live.json` dosyasından beslenir; panel veya veritabanı gerekmez.
+`data/arena-live.json` dosyasından beslenir; tam panel veya veritabanı gerekmez, salt okunur arayüz dahildir.
 
 ## Dosyalar
 

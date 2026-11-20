@@ -51,17 +51,17 @@
     {
       title: "YÖNETİM",
       items: [
-        { label: "Hesaplar", href: "yardim.html#tam-panel", icon: "users", page: "yardim", full: true },
-        { label: "Ajanslar", href: "yardim.html#tam-panel", icon: "building", page: "yardim", full: true },
-        { label: "Fırsatlar", href: "yardim.html#tam-panel", icon: "briefcase", page: "yardim", full: true },
-        { label: "Gelir", href: "yardim.html#tam-panel", icon: "wallet", page: "yardim", full: true },
+        { label: "Hesaplar", path: "/hesaplar", icon: "users", page: "hesaplar", panel: true },
+        { label: "Ajanslar", path: "/ajanslar", icon: "building", page: "ajanslar", panel: true },
+        { label: "Fırsatlar", path: "/firsatlar", icon: "briefcase", page: "firsatlar", panel: true },
+        { label: "Gelir", path: "/gelir", icon: "wallet", page: "gelir", panel: true },
       ],
     },
     {
       title: "OTOMASYON",
       items: [
-        { label: "Bot & Uyarılar", href: "yardim.html#otomasyon", icon: "bot", page: "yardim", full: true },
-        { label: "AI Koç", href: "yardim.html#otomasyon", icon: "spark", page: "yardim", full: true },
+        { label: "Bot & Uyarılar", path: "/bot", icon: "bot", page: "bot", panel: true },
+        { label: "AI Koç", path: "/ai", icon: "spark", page: "ai", panel: true },
       ],
     },
     {
@@ -79,6 +79,15 @@
     return D ? D.escapeHtml(value) : String(value == null ? "" : value);
   }
 
+  function panelBase() {
+    var base = D && typeof D.panelUrl === "function" ? D.panelUrl() : "";
+    return (base || "http://localhost:3000").replace(/\/+$/, "");
+  }
+
+  function itemHref(item) {
+    return item.panel ? panelBase() + (item.path || "") : item.href;
+  }
+
   function navHtml() {
     var page = document.body.dataset.page || "";
     return NAV.map(function (group) {
@@ -86,16 +95,19 @@
         '<div class="nav-group"><p class="nav-title">' + group.title + "</p>" +
         group.items
           .map(function (item) {
-            var active = item.page === page && !item.full ? " active" : "";
+            var active = item.page === page && !item.panel ? " active" : "";
             var badge = item.badge
               ? '<span class="nav-badge' + (item.mint ? " mint" : "") + '">' + item.badge + "</span>"
               : "";
-            var lock = item.full ? '<span class="nav-chevron" title="Tam panel Windows uygulamasında">' + icon("lock", 12) + "</span>" : "";
+            var external = item.external || item.panel;
+            var arrow = item.panel
+              ? '<span class="nav-chevron" title="Tam panelde aç">' + icon("external", 12) + "</span>"
+              : "";
             return (
-              '<a class="nav-item' + active + '" href="' + item.href + '"' +
-              (item.external ? ' target="_blank" rel="noreferrer"' : "") +
-              (item.full ? ' title="Hesaplar, ajanslar ve gelir modülleri tam panelde çalışır"' : "") +
-              ">" + icon(item.icon) + '<span class="label">' + item.label + "</span>" + badge + lock + "</a>"
+              '<a class="nav-item' + active + '" href="' + itemHref(item) + '"' +
+              (external ? ' target="_blank" rel="noreferrer"' : "") +
+              (item.panel ? ' title="Tam panelde aç"' : "") +
+              ">" + icon(item.icon) + '<span class="label">' + item.label + "</span>" + badge + arrow + "</a>"
             );
           })
           .join("") +
@@ -126,6 +138,7 @@
       '<div class="top-actions">' +
       '<span class="status-pill"><i class="dot" data-status-dot></i><span data-status-text>Bağlanıyor</span></span>' +
       '<button class="icon-btn bell" data-bell title="Bildirimler" aria-label="Bildirimler">' + icon("bell", 15) + "</button>" +
+      '<a class="btn" href="' + panelBase() + '" target="_blank" rel="noreferrer" title="Tam paneli aç">' + icon("grid", 12) + " Tam panel</a>" +
       '<a class="btn primary" href="yayinlar.html#studio">' + icon("play", 12) + " Yeni yayın</a>" +
       "</div>"
     );

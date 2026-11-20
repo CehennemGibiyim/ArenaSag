@@ -11,7 +11,7 @@ export default function WindowsPage() {
       <PageHeader
         eyebrow="Dağıtım · Windows"
         title="Windows kurulum paketi"
-        description="GitHub'da üretilen Arena Radar kurulum paketi: panel veya PostgreSQL gerekmez, açılışta sürümü denetler ve GitHub'daki canlı sandık verisini çeker. Tam panel için zip paketi de indirilebilir."
+        description="GitHub'da üretilen Arena Radar kurulum paketi: salt okunur panel dahil, PostgreSQL gerektirmez; açılışta sürümü denetler ve GitHub'daki canlı sandık verisini çeker. Tam panel için zip paketi de indirilebilir."
         actions={
           <>
             <a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe" className="btn btn-primary">

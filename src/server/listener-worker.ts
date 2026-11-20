@@ -8,6 +8,8 @@ import { bumpRoomChest } from "@/server/rooms";
 import { envelopeReward, bagReward } from "@/server/rewards";
 import { getSettings } from "@/server/settings";
 import { battlePeers, obj } from "@/lib/discovery-model";
+import { chatSignal, giftSignal, mergeAudienceSignal, pickAudienceCandidates, type AudienceSignal } from "@/lib/audience-signals";
+import { saveAudienceCandidates } from "@/server/audience-discovery";
 import { claimRoom, enqueue, leaseEnd, owned } from "@/server/listener-queue";
 import { failurePolicy, localCapacity } from "@/server/listener-policy";
 import { roomInfo } from "@/server/discovery";
@@ -22,11 +24,15 @@ async function listen(job: ListenerJob) {
     eulerApiInstance: new EulerClient({ basePath: "https://api.eulerstream.com", apiKey: signingKey(), baseOptions: {
       timeout: 10_000, validateStatus: () => true, headers: { "User-Agent": "ArenaLiveOS/1.2 (tiktok-live-connector/2.5.0)" } } }), wsClientOptions: { handshakeTimeout: 12_000 } });
   let closing = false, connected = false, heartbeatBusy = false, ended = false, ownedLease = true;
+  let connectedAt = 0;
   let error: unknown = new Error("Bağlantı kesildi.");
   let signalClose!: () => void;
   const closed = new Promise<void>(resolve => { signalClose = resolve; });
   const finish = (e?: unknown) => { if (e) error = e; signalClose(); };
   const flow = new GiftFlow(), peers = new Set<string>();
+  // Gifters and chatters are watch-list candidates only; they never become this room's broadcaster.
+  const audience = new Map<string, AudienceSignal>();
+  let audienceBusy = false;
   const meta = { username: job.username, nickname: job.nickname, title: job.title, roomId: job.roomId, viewers: job.viewers };
   const sameRoom = and(eq(liveRooms.username, job.username), eq(liveRooms.roomId, job.roomId));
   const save = async (fields: EnvelopeFields | null) => {
@@ -38,6 +44,21 @@ async function listen(job: ListenerJob) {
     const info = await roomInfo(job.roomId);
     if (!closing && info.roomId === job.roomId && (!info.username || info.username === job.username)) {
       for (const reward of info.rewards) await save(reward);
+    }
+  };
+  const flushAudience = async () => {
+    if (closing || !connected || !ownedLease || audienceBusy) return;
+    const picks = pickAudienceCandidates(audience.values(), job.username);
+    if (!picks.length) return;
+    audienceBusy = true;
+    try {
+      await saveAudienceCandidates(job.username, picks);
+      // Keep unqualified or failed rows so short chats can accumulate into a later, stronger signal.
+      for (const pick of picks) audience.delete(pick.username);
+    } catch {
+      /* Sinyaller bellekte kalır; sonraki turda yeniden denenir. */
+    } finally {
+      audienceBusy = false;
     }
   };
   conn.on(WebcastEvent.ENVELOPE, raw => { void save(envelopeReward(raw, job.roomId)).catch(() => null); });
@@ -57,6 +78,12 @@ async function listen(job: ListenerJob) {
     const item = obj(raw), user = obj(item.user), gift = obj(item.giftDetails);
     flow.addGift(job.username, meta, { user: String(user.displayId ?? user.uniqueId ?? "?"), giftId: String(item.giftId ?? ""),
       diamonds: Number(gift.diamondCount ?? item.diamondCount ?? 0), repeatCount: Number(item.repeatCount ?? 1) });
+    // A gift sender is a strong broadcaster candidate, but still only a candidate for the watch pool.
+    mergeAudienceSignal(audience, giftSignal(raw));
+  });
+  conn.on(WebcastEvent.CHAT, raw => {
+    if (closing) return;
+    mergeAudienceSignal(audience, chatSignal(raw));
   });
   conn.on(WebcastEvent.ROOM_USER, raw => { const count = Number(obj(raw).viewerCount); if (Number.isSafeInteger(count) && count >= 0) meta.viewers = count; });
   conn.on(ControlEvent.DISCONNECTED, () => finish());
@@ -74,6 +101,7 @@ async function listen(job: ListenerJob) {
     }).catch(() => { ownedLease = false; finish(); }).finally(() => { heartbeatBusy = false; });
   }, 12_000);
   let refresh: ReturnType<typeof setInterval> | undefined;
+  let audienceTimer: ReturnType<typeof setInterval> | undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     // If the external handshake resolves after cancellation, close it rather than leaving an unowned socket.
@@ -88,23 +116,28 @@ async function listen(job: ListenerJob) {
       leaseUntil: leaseEnd(), lastError: "", updatedAt: new Date() }).where(owned(job)).returning({ id: listenerJobs.id });
     if (!started) { ownedLease = false; return; }
     connected = true;
+    connectedAt = Date.now();
     await db.update(liveRooms).set({ monitoring: true, verifiedAt: new Date() }).where(sameRoom);
     void saveRoom().catch(() => null);
     refresh = setInterval(() => { void saveRoom().catch(() => null); for (const row of flow.rows()) void upsertFlow({ ...row, liveNow: true }).catch(() => null); }, 120_000);
+    audienceTimer = setInterval(() => void flushAudience(), 45_000);
     await closed;
+    await flushAudience();
   } catch (e) { error = e; }
   finally {
     closing = true;
-    clearInterval(heartbeat); clearInterval(refresh); clearTimeout(timeout);
+    clearInterval(heartbeat); clearInterval(refresh); clearInterval(audienceTimer); clearTimeout(timeout);
     const policy = failurePolicy(error, connected ? 0 : job.attempts);
     if (policy.shared) await pauseProvider("listener", policy.wait, policy.detail).catch(() => null);
     await conn.disconnect().catch(() => null);
     if (ownedLease) {
       ended ||= policy.offline;
+      const listenedSeconds = connectedAt ? Math.max(1, Math.round((Date.now() - connectedAt) / 1000)) : 0;
       for (const row of flow.rows()) await upsertFlow({ ...row, liveNow: !ended }).catch(() => null);
       await db.transaction(async tx => {
         const [released] = await tx.update(listenerJobs).set({ status: ended ? "offline" : "retry", owner: "", leaseUntil: null, connectedAt: null,
-          attempts: connected ? 1 : sql`${listenerJobs.attempts} + 1`, lastError: ended ? "Yayın bitti." : policy.detail,
+          attempts: connected ? 1 : sql`${listenerJobs.attempts} + 1`, listenedSeconds: sql`${listenerJobs.listenedSeconds} + ${listenedSeconds}`,
+          lastError: ended ? "Yayın bitti." : policy.detail,
           nextAttemptAt: new Date(Date.now() + policy.wait), updatedAt: new Date() }).where(owned(job)).returning({ id: listenerJobs.id });
         if (released) await tx.update(liveRooms).set({ monitoring: false, ...(ended ? { liveNow: false } : {}) }).where(sameRoom);
       });

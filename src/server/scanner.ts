@@ -1,6 +1,8 @@
 import { and, asc, desc, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activityLog, chests, cohostCandidates, listenerJobs, liveRooms, providerGates, radarScans, targets } from "@/db/schema";
+import { hourInZone, recordTargetObservations, type TargetObservation } from "@/server/target-feedback";
+import { coolingUsernames, watchCandidates } from "@/server/scheduler";
 import { asCandidate, cleanHandle, countryCode, directoryBatch, type Candidate, type DiscoveryReport, type RegionBasis, type SourceRead } from "@/lib/discovery-model";
 import { discoverAllRegions, REGIONS_ALL, summarizeRegions } from "@/server/discovery-global";
 import { eulerFeedEnabled, publicDirectory, regionalSamples, tickerSample } from "@/server/free-discovery";
@@ -58,6 +60,8 @@ export async function runScan(options: ScanOptions = {}) {
   const common = { scope, report, scanId: scan?.id ?? 0, regionSummary: null as ReturnType<typeof summarizeRegions> | null,
     checked: 0, liveFound: 0, chestsFound: 0, queued: 0, eulerRequests: 0, publicRequests: 0, source, error: "", errors: report.errors };
   if (!scan) return { ...common, source: "busy", error: "Tur sürüyor veya kısa bekleme aralığında. Yeni istek gönderilmedi." };
+  // Cooling applies to every free source, not only the saved pool; manual scans still check explicitly.
+  const cooling = only.length ? new Set<string>() : await coolingUsernames();
   const gate = and(eq(providerGates.provider, "discovery-run"), eq(providerGates.reason, `scan:${scan.id}`));
   const beat = setInterval(() => { void db.update(providerGates).set({ nextAt: new Date(Date.now() + 2 * MIN) }).where(gate).catch(() => null); }, 20_000);
   const all = new Map<string, { candidate: Candidate; group: SourceRead }>();
@@ -117,28 +121,48 @@ export async function runScan(options: ScanOptions = {}) {
       }
     }
     const saved = sourceRead("saved");
+    const watchedPool = sourceRead("targets");
+    const hour = hourInZone(settings.timezone);
     const [rooms, watched] = only.length ? [[],[]] as const : await Promise.all([
       db.select().from(liveRooms).where(or(eq(liveRooms.liveNow, true),eq(liveRooms.pinned,true),gt(liveRooms.verifiedAt,new Date(Date.now()-24*60*MIN))))
         .orderBy(sql`${liveRooms.probedAt} asc nulls first`, asc(liveRooms.id)).limit(120),
-      db.select().from(targets).orderBy(sql`${targets.lastCheckedAt} asc nulls first`).limit(48)]);
-    const candidates = only.length ? only.map(u => asCandidate(u,u,"","","unknown","manual")) : [
-      ...rooms.map(r => asCandidate(r.username, r.nickname, r.roomId, r.regionBasis === "unknown" ? "" : r.region, r.regionBasis as RegionBasis, r.source)),
-      ...watched.map(r => asCandidate(r.username, r.displayName,"","","unknown","targets"))];
-    saved.state = candidates.length ? "ok" : "empty"; include(candidates,saved,!only.length);
+      watchCandidates(hour)]);
+    if (only.length) {
+      const manual = only.map(u => asCandidate(u,u,"","","unknown","manual"));
+      saved.state = manual.length ? "ok" : "empty"; include(manual,saved,false);
+    } else {
+      const roomCandidates = rooms.map(r => asCandidate(r.username, r.nickname, r.roomId, r.regionBasis === "unknown" ? "" : r.region, r.regionBasis as RegionBasis, r.source));
+      saved.state = roomCandidates.length ? "ok" : "empty"; include(roomCandidates,saved,true);
+      const watchedCandidates = watched.map(r => asCandidate(r.username, r.displayName,"","","unknown","targets"));
+      watchedPool.state = watchedCandidates.length ? "ok" : "empty";
+      watchedPool.detail = `${watchedCandidates.length} kayıtlı aday · saatlik canlılık ve skora göre sıralı.`;
+      include(watchedCandidates,watchedPool,true);
+    }
     // Fair verification budget. Neither a huge directory nor old rooms can monopolize a scan.
     const groups = report.sources.map(source => [...all.values()].filter(v => v.group === source));
     const probes: Candidate[] = [];
     while (probes.length < 112 && groups.some(g => g.length)) {
-      for (const group of groups) { if (group.length && probes.length < 112) probes.push(group.shift()!.candidate); }
+      for (const group of groups) {
+        if (!group.length || probes.length >= 112) continue;
+        const candidate = group.shift()!.candidate;
+        if (!cooling.has(candidate.username)) probes.push(candidate);
+      }
     }
     report.deferred = all.size - probes.length;
     const observations = await verifyCandidates(probes);
     const seen = new Set<string>();
+    const feedback: TargetObservation[] = [];
     for (const o of observations) {
       const seed = o.seed, group = all.get(seed.username)!.group;
       report.checked++; group.checked++;
-      await db.update(targets).set({ lastCheckedAt: new Date(), ...(o.state !== "unknown" ? { liveNow: o.state === "live", viewers: o.viewers } : {}) }).where(eq(targets.username,seed.username));
-      await db.update(liveRooms).set({ probedAt: new Date() }).where(eq(liveRooms.username,seed.username));
+      feedback.push({ username: seed.username, state: o.state });
+      const checkedAt = new Date();
+      await db.update(targets).set({
+        lastCheckedAt: checkedAt,
+        ...(o.state !== "unknown" ? { liveNow: o.state === "live", viewers: o.viewers } : {}),
+        ...(o.state === "live" ? { score: sql`least(100, ${targets.score} + 15)` } : {}),
+      }).where(eq(targets.username,seed.username));
+      await db.update(liveRooms).set({ probedAt: checkedAt }).where(eq(liveRooms.username,seed.username));
       if (o.state === "unknown") { report.unknown++; continue; }
       if (o.state === "offline") {
         report.offline++; await markOffline(seed.username, o.roomId || seed.roomId);
@@ -157,6 +181,7 @@ export async function runScan(options: ScanOptions = {}) {
         if (row) await bumpRoomChest(row.username,row.coins,row.slots,deriveChest(row).ratio);
       }
     }
+    await recordTargetObservations(feedback, hour).catch(() => null);
     common.error = `${report.newRooms} yeni oda (${report.firstHosts ?? 0} ilk kez canlı görülen hesap) · ${report.repeatedRooms} yeniden doğrulanan · ${report.unknown} belirsiz.`;
   } catch (e) { common.error = "Tur kısmen tamamlandı."; report.errors.push(message(e)); }
   finally {

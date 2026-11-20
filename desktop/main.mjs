@@ -694,9 +694,63 @@ async function readBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+// The read-only web panel ships with the lightweight Windows package, so the interface is always
+// available even when the full Next.js/PostgreSQL panel is not installed.
+const WEB_ROOT = path.join(ROOT, "web");
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+};
+
+async function servePanel(url, res) {
+  if (url.pathname === "/panel") {
+    res.writeHead(302, { Location: "/panel/" });
+    res.end();
+    return true;
+  }
+  if (!url.pathname.startsWith("/panel/")) return false;
+  let relative;
+  try {
+    relative = decodeURIComponent(url.pathname.slice("/panel/".length)) || "index.html";
+  } catch {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Geçersiz panel adresi.");
+    return true;
+  }
+  const file = path.resolve(WEB_ROOT, relative);
+  if (file !== WEB_ROOT && !file.startsWith(WEB_ROOT + path.sep)) {
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Panel yolu geçersiz.");
+    return true;
+  }
+  try {
+    const info = await fsp.stat(file);
+    if (!info.isFile()) throw new Error("not a file");
+    res.writeHead(200, {
+      "Content-Type": MIME[path.extname(file).toLowerCase()] || "application/octet-stream",
+      "Cache-Control": "no-store",
+    });
+    res.end(await fsp.readFile(file));
+  } catch {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Panel dosyası bulunamadı.");
+  }
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://127.0.0.1:${config.port}`);
   try {
+    if (req.method === "GET" && (await servePanel(url, res))) return;
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       const html = await fsp.readFile(path.join(APP_DIR, "ui", "index.html"));
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });

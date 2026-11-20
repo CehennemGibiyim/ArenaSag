@@ -9,6 +9,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arena_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arena_smoke"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
     - name: Checkout repository
@@ -22,6 +36,10 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    # Projendeki diğer adımlar (örn: build, test vb.) buraya gelebilir
+    - name: PostgreSQL scheduler smoke test
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/arena_smoke
+      run: npm run test:postgres
+
     - name: Run build
       run: npm run build --if-present

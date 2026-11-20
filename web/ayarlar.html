@@ -24,6 +24,7 @@
         </div>
         <div class="head-actions">
           <a class="btn" href="yardim.html">Yardım</a>
+          <a class="btn" id="openPanel" href="http://localhost:3000" target="_blank" rel="noreferrer">Tam paneli aç</a>
           <a class="btn primary" href="index.html">Panele dön</a>
         </div>
       </div>
@@ -34,7 +35,7 @@
           <div class="card-pad">
             <div class="field"><div>Yenileme sıklığı<small>5–120 saniye · varsayılan 10</small></div><input type="number" id="refresh" min="5" max="120" step="5" value="10" /></div>
             <div class="field"><div>Veri adresi<small>Boş = GitHub Radar (ham veri + Pages)</small></div><input type="text" id="dataUrl" placeholder="https://…/arena-live.json" /></div>
-            <div class="field"><div>Panel API adresi<small>Yerel Windows paneli · isteğe bağlı</small></div><input type="text" id="panelUrl" placeholder="http://127.0.0.1:4817" /></div>
+            <div class="field"><div>Tam panel adresi<small>Hesaplar, ajanslar, gelir ve otomasyon · varsayılan http://localhost:3000</small></div><input type="text" id="panelUrl" placeholder="http://localhost:3000" /></div>
             <div class="field"><div>Bildirimler<small>Sandık açılmadan önce tarayıcı uyarısı</small></div><button class="btn sm" id="notifyBtn">İzin ver</button></div>
             <div class="field"><div>Test bildirimi<small>İzin verildiyse hemen dener</small></div><button class="btn sm" id="testBtn">Gönder</button></div>
             <div class="head-actions" style="margin-top:14px">
@@ -105,6 +106,13 @@
   refreshInput.value = read("arenaRefresh", "10");
   dataInput.value = read("arenaData", "");
   panelInput.value = read("arenaPanel", "");
+
+  function panelTarget() {
+    return (panelInput.value.trim() || "http://localhost:3000").replace(/\/+$/, "");
+  }
+  function syncPanelLink() { el("openPanel").href = panelTarget(); }
+  panelInput.addEventListener("input", syncPanelLink);
+  syncPanelLink();
 
   function paintNotify() {
     if (!("Notification" in window)) {

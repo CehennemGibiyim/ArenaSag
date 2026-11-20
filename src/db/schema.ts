@@ -78,6 +78,14 @@ export const targets = pgTable("targets", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Hedef geri bildirimi — saatlik canlı/kontrol sayıları ve üst üste boş kontrol serisi. */
+export const targetStats = pgTable("target_stats", {
+  username: text("username").primaryKey(),
+  liveHours: integer("live_hours").array().notNull().default([]),
+  checkHours: integer("check_hours").array().notNull().default([]),
+  offlineStreak: integer("offline_streak").notNull().default(0),
+});
+
 /** Canlı yayın oturumları (gerçek connector veya demo) */
 export const liveSessions = pgTable("live_sessions", {
   id: serial("id").primaryKey(),
@@ -316,6 +324,7 @@ export const listenerJobs = pgTable(
     connectedAt: timestamp("connected_at", { withTimezone: true }),
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
     attempts: integer("attempts").notNull().default(0),
+    listenedSeconds: integer("listened_seconds").notNull().default(0),
     lastError: text("last_error").notNull().default(""),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -356,6 +365,7 @@ export type Agency = typeof agencies.$inferSelect;
 export type Creator = typeof creators.$inferSelect;
 export type Opportunity = typeof opportunities.$inferSelect;
 export type Target = typeof targets.$inferSelect;
+export type TargetStats = typeof targetStats.$inferSelect;
 export type LiveSession = typeof liveSessions.$inferSelect;
 export type LiveEvent = typeof liveEvents.$inferSelect;
 export type BotCommand = typeof botCommands.$inferSelect;

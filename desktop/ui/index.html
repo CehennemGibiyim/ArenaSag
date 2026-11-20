@@ -80,6 +80,7 @@
     <div class="brand"><span class="mark">A</span> ARENA RADAR</div>
     <div class="tools">
       <button id="openWeb">Web radar</button>
+      <button id="openPanel">Panel</button>
       <button id="settingsBtn">Ayarlar</button>
       <button id="versionBtn" title="GitHub sürümünü denetle">v—</button>
     </div>
@@ -477,6 +478,9 @@
   };
   document.getElementById("openWeb").onclick = function () {
     fetch("/api/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: "https://cehennemgibiyim.github.io/ArenaSag/sandik.html" }) });
+  };
+  document.getElementById("openPanel").onclick = function () {
+    window.open("/panel/", "_blank", "noopener");
   };
   document.getElementById("repoLink").onclick = function (event) {
     event.preventDefault();

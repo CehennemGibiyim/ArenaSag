@@ -85,7 +85,7 @@
 
       <section class="card card-pad prose" id="tam-panel" style="margin-top:14px">
         <h2>4 · Tam panel modülleri</h2>
-        <p>Bu GitHub Pages paneli herkese açık, salt okunur bir vitrindir. Veritabanı, oturum ve yazma işlemleri gerektiren modüller Windows paketindeki tam panelde çalışır:</p>
+        <p>Bu GitHub Pages paneli herkese açık bir vitrindir. Yönetim ve otomasyon bağlantıları tam panele gider; hiçbir modül kilitli değildir. Tam panel varsayılan olarak <code>http://localhost:3000</code> adresinde çalışır:</p>
         <ul>
           <li><b>Hesaplar:</b> yayıncı hesapları, takip listesi ve erişim durumu.</li>
           <li><b>Ajanslar:</b> kadro, sözleşme ve performans grupları.</li>
@@ -94,7 +94,7 @@
           <li><b>Bot & Uyarılar:</b> masaüstü bildirimi, webhook ve otomatik hatırlatma.</li>
           <li><b>AI Koç:</b> yayın başlığı, hedef ve içerik önerileri.</li>
         </ul>
-        <p>Sol menüde kilit simgesi görünen bağlantılar bu yüzden bu sayfaya gelir. Tam panele geçmek için Windows kurulum paketini indir.</p>
+        <p>Sol menüdeki Hesaplar, Ajanslar, Fırsatlar, Gelir, Bot &amp; Uyarılar ve AI Koç bağlantıları tam paneli açar. Adresi <a href="ayarlar.html">Ayarlar → Tam panel adresi</a> bölümünden değiştirebilirsin. Windows tam kurulum paketi paneli bu adreste başlatır.</p>
         <figure class="figure">
           <img src="assets/sandik.png" alt="Sandık radarı ekran görüntüsü" />
           <figcaption>Sandık radarı: oran, jeton, kontenjan ve açılışa kalan süre. Canlıya tek tıkla götürür.</figcaption>
@@ -116,8 +116,8 @@
         <p>Hayır. Sandıklar yalnızca TikTok zarfında gerçekten göründüğünde listelenir. Tarama sürerken veya o an sandık yokken 0 kalması normaldir. Bir sonraki tur birkaç dakika içinde çalışır.</p>
         <h3>Veri ne kadar sürede yenilenir?</h3>
         <p>GitHub taraması yaklaşık 5 dakikada bir, Windows istemcisi ham veriyi 5 saniyede bir, bilinen odaların zarfını 20 saniyede bir yoklar. Web paneli 10 saniyede bir tazelenir.</p>
-        <h3>Neden bazı menü öğeleri kilitli?</h3>
-        <p>Hesaplar, Ajanslar, Fırsatlar ve Gelir modülleri veritabanı ve oturum gerektirir; statik GitHub panelinde salt okunur vitrin olarak yer alırlar. Tam panel Windows paketindedir.</p>
+        <h3>Tam panel nerede açılır?</h3>
+        <p>Statik sayfadaki yönetim ve otomasyon bağlantıları tam panele gider. Varsayılan adres <code>http://localhost:3000</code>; Windows tam kurulum paketi bu paneli başlatır. Farklı bir adres için Ayarlar → Tam panel adresi bölümünü kullan.</p>
         <h3>Jetonlar otomatik toplanıyor mu?</h3>
         <p>Hayır. TikTok otomatik jeton toplamaya izin vermez. Sistem sandığı süresi dolmadan gösterir, bildirir ve canlıya tek tıkla götürür.</p>
         <h3>Kurulumu nasıl kaldırırım?</h3>

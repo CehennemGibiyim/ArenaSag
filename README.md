@@ -94,7 +94,7 @@ Ayrıntılı mimari: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md)
 | Ayarlar | `/ayarlar.html` | Yenileme sıklığı, veri kaynağı, bildirim izni, tanılama |
 | Overlay | `/overlay.html` | OBS browser source widget'ları |
 
-Sol menüde kilit simgesi görünen **Hesaplar, Ajanslar, Fırsatlar, Gelir, Bot & Uyarılar, AI Koç** modülleri veritabanı ve oturum gerektirir; Windows paketindeki tam panelde çalışır. Statik GitHub panelinde bu bağlantılar yardım sayfasına gider.
+**Hesaplar, Ajanslar, Fırsatlar, Gelir, Bot & Uyarılar ve AI Koç** bağlantıları tam panele gider; hiçbir modül kilitli değildir. Tam panel varsayılan olarak `http://localhost:3000` adresinde çalışır, adres Ayarlar → Tam panel adresi bölümünden değiştirilebilir.
 
 ## Öne çıkan sistemler
 

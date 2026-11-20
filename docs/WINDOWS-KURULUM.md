@@ -5,13 +5,13 @@
 ## 0. Arena Radar — önerilen hafif kurulum
 
 Tam panel (PostgreSQL + Node.js) kurmak istemiyorsan yalnızca GitHub'daki canlı radarı izleyen
-Windows uygulamasını kur:
+Windows uygulamasını kur; paket salt okunur web panelini de `/panel/` altında sunar:
 
 1. [ArenaRadar-Setup.exe](https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe) indir.
 2. Çalıştır. Kurulum `%LOCALAPPDATA%\Programs\Arena Radar` altına yapılır; **yönetici izni gerekmez**.
 3. Uygulama açılır, masaüstü ve başlangıç kısayolları oluşur.
 4. Veri GitHub Actions taramasından (`web/data/arena-live.json`) ve uygulamanın kendi yerel keşif turundan gelir.
-5. Panel içi resimli rehber: uygulamada **Web radar → Yardım** veya doğrudan `https://cehennemgibiyim.github.io/ArenaSag/yardim.html`.
+5. Uygulamadaki **Panel** düğmesi salt okunur arayüzü `/panel/` altında açar. **Web radar** GitHub Pages radarını, **Yardım** ise resimli rehberi açar.
 
 | Özellik | Davranış |
 | --- | --- |

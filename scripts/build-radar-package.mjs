@@ -35,6 +35,7 @@ fs.rmSync(STAGE, { recursive: true, force: true });
 fs.mkdirSync(STAGE, { recursive: true });
 
 copy("desktop");
+copy("web");
 copy("scripts/radar-publish.mjs");
 copy("version.json");
 
@@ -77,6 +78,7 @@ fs.writeFileSync(
     `${version.name} ${version.version}`,
     `Paketlenme: ${new Date().toISOString()}`,
     "Veri kaynağı: GitHub Radar (web/data/arena-live.json)",
+    "Panel: http://127.0.0.1:4817/panel/ (salt okunur web paneli)",
     "Kurulum: ArenaRadar-Setup.exe (yönetici gerekmez)",
     "Kaldırma: Ayarlar → Uygulamalar → Arena Radar",
     "",

@@ -49,9 +49,9 @@ Arka plan tarama: scripts/windows/install-service.ps1 (NSSM veya Görev Zamanlay
 Güncelleme: Arena-Update.bat (GitHub Release, SHA256 doğrulamalı)
 Ilk veri: Invoke-RestMethod -Method Post http://localhost:3000/api/demo/seed
 
-Hafif Windows Radar uygulamasi (panel/PostgreSQL gerekmez):
+Hafif Windows Radar uygulamasi (salt okunur panel dahil; PostgreSQL gerekmez):
 GitHub Release -> ArenaRadar-Setup.exe. GitHub Actions taramasinin yayinladigi
-web/data/arena-live.json dosyasini okur ve sandik bildirimi gonderir.
+web/data/arena-live.json dosyasini okur, /panel/ altinda web panelini sunar ve sandik bildirimi gonderir.
 `;
 
 async function addDirectory(zip: JSZip, relative: string) {

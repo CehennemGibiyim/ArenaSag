@@ -1,6 +1,6 @@
 # Arena Radar — Windows istemcisi
 
-Panel veya PostgreSQL gerektirmez. GitHub Actions'ın yayınladığı canlı veriyi okur.
+Tam panel veya PostgreSQL gerektirmez. Salt okunur web paneli `/panel/` altında dahildir; GitHub Actions'ın yayınladığı canlı veriyi okur.
 
 ## Geliştirme
 
