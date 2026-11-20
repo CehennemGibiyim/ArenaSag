@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "dataVersion": "2026-11-20T08:36:22.334Z",
-  "generatedAt": "2026-11-20T08:36:22.334Z",
-  "commit": "cbb49152baf74d4cbc4edfdffa0a8682a7fdeec7",
+  "dataVersion": "2026-11-20T17:14:34.310Z",
+  "generatedAt": "2026-11-20T17:14:34.310Z",
+  "commit": "271b996cbf45c6cb5185d25a3710055b2aa79ac1",
   "stats": {
-    "candidates": 82,
-    "checked": 77,
-    "live": 12,
+    "candidates": 62,
+    "checked": 62,
+    "live": 16,
     "chests": 0,
-    "errors": 4
+    "errors": 5
   }
 }
