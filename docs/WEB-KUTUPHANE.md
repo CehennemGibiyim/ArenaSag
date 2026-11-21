@@ -9,7 +9,7 @@ GitHub Pages, Netlify, herhangi bir statik hosting veya OBS Browser Source üzer
 `data/arena-live.json` dosyasını okur. Varsayılan kaynak sırası:
 
 1. `data/arena-live.json` (aynı origin)
-2. `https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/main/web/data/arena-live.json`
+2. `https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/data/web/data/arena-live.json` (veri `data` dalında tutulur)
 
 Özel veri adresi: `sandik.html?data=https://.../arena-live.json`
 Arena paneli kullanılacaksa: `sandik.html?panel=https://panel.ornek.com` veya sayfadaki **Panel** düğmesi.
