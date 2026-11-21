@@ -84,9 +84,11 @@
 
   <div class="statusline">
     <span class="pill"><i class="dot" id="dot"></i><span id="source">GitHub Radar</span></span>
+    <span class="pill"><i class="dot" id="wsDot"></i><span id="wsText">WS zarf dinleme yükleniyor…</span></span>
     <span id="fresh">veri yükleniyor…</span>
     <span id="extra"></span>
   </div>
+  <div id="wsWarn"></div>
 
   <div class="stats">
     <div class="stat"><b id="sChests">—</b><span>Sandık</span></div>
@@ -94,6 +96,7 @@
     <div class="stat"><b id="sBest">—</b><span>En iyi oran</span></div>
     <div class="stat"><b id="sSoon">—</b><span>En yakın açılış</span></div>
     <div class="stat"><b id="sScan">—</b><span>Son tarama</span></div>
+    <div class="stat"><b id="sWs">—</b><span id="sWsLabel">WS zarf</span></div>
   </div>
 
   <div class="tabs" id="tabs"></div>
@@ -123,6 +126,7 @@
     lastFetchAt: 0,
     lastError: "",
     panel: D.panelUrl(),
+    wsKey: "",
     loading: false,
   };
 
@@ -278,6 +282,21 @@
       notice.innerHTML = '<div class="warnbox">GitHub taraması gecikti. Veri son doğrulanmış hâliyle gösteriliyor; sandık süreleri değişmiş olabilir.</div>';
     }
     document.getElementById("err").textContent = state.lastError ? "Veri hatası: " + state.lastError : "";
+    // Bu blok saniyede bir çağrılır; yalnızca metin değişince yeniden çizilir.
+    var ws = state.snapshot ? D.watchSummary(state.snapshot) : null;
+    var wsKey = ws ? ws.label + "|" + ws.warnings.join("|") : "";
+    if (wsKey !== state.wsKey) {
+      state.wsKey = wsKey;
+      document.getElementById("wsText").textContent = ws ? ws.label : "WS zarf dinleme yükleniyor…";
+      document.getElementById("wsDot").className =
+        "dot" + (ws ? (ws.rateLimited ? " bad" : !ws.keyed || !ws.known ? " warn" : "") : " warn");
+      document.getElementById("wsWarn").innerHTML = ws
+        ? ws.warnings.map(function (line) { return '<div class="warnbox">' + D.escapeHtml(line) + '</div>'; }).join("")
+        : "";
+      document.getElementById("sWs").textContent = ws && ws.known ? D.formatNumber(ws.envelopes) : "—";
+      document.getElementById("sWsLabel").textContent =
+        ws && ws.known ? "WS zarf · " + ws.rooms + "/" + ws.requested + " oda" : "WS zarf";
+    }
     var extra = [];
     if (state.snapshot && state.snapshot.errors && state.snapshot.errors.length) {
       extra.push(state.snapshot.errors.length + " kaynak uyarısı");

@@ -32,6 +32,21 @@ export function validateSnapshot(data) {
   if (!Array.isArray(data.streams)) push(problems, "streams dizi olmalı");
   if (!Array.isArray(data.chests)) push(problems, "chests dizi olmalı");
   if (data.errors !== undefined && !Array.isArray(data.errors)) push(problems, "errors dizi olmalı");
+  if (data.warnings !== undefined && (!Array.isArray(data.warnings) || data.warnings.some((line) => !isStr(line)))) {
+    push(problems, "warnings metin dizisi olmalı");
+  }
+  if (data.watch !== undefined && data.watch !== null) {
+    const watch = data.watch;
+    if (!isObj(watch)) push(problems, "watch nesne olmalı");
+    else {
+      for (const key of ["requested", "connected", "failed", "seconds", "envelopes", "rateLimitHits"]) {
+        if (!isNum(Number(watch[key]))) push(problems, `watch.${key} sayı olmalı`);
+      }
+      if (typeof watch.rateLimited !== "boolean") push(problems, "watch.rateLimited boolean olmalı");
+      if (typeof watch.signedWithKey !== "boolean") push(problems, "watch.signedWithKey boolean olmalı");
+      if (!isObj(watch.messageTypes)) push(problems, "watch.messageTypes nesne olmalı");
+    }
+  }
 
   for (const [index, row] of (Array.isArray(data.streams) ? data.streams : []).entries()) {
     if (!isObj(row)) {

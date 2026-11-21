@@ -126,6 +126,42 @@ export function bagReward(raw, fallbackRoomId = "") {
 }
 
 /**
+ * Panelde ve `arena-live.json` içinde gösterilecek dinleme uyarıları.
+ *
+ * Sessiz yutma yok: dinleme kapalıysa, çalışmadıysa, imzalama anahtarı yoksa
+ * veya kota dolduysa nedeni açık bir cümleyle döner.
+ */
+export function envelopeWarnings(watch, { rooms = 0, enabled = true, seconds = 0, apiKey = false } = {}) {
+  if (!enabled) return ["WebSocket zarf dinleyicisi kapalı (ARENA_ENVELOPE_ROOMS=0)."];
+  if (!watch) {
+    return [`WebSocket zarf dinleyicisi bu turda çalışmadı (${seconds} sn dinleme penceresi yok).`];
+  }
+  const warnings = [];
+  if (!watch.signedWithKey) {
+    warnings.push(
+      apiKey
+        ? "EULER_API_KEY tanımlı ama imzalama anahtarsız çalıştı: ücretsiz kota uygulanıyor."
+        : "EULER_API_KEY yok: WebSocket imzalaması ücretsiz kotada. Dakikada yalnızca birkaç oda bağlanır; " +
+            `${rooms} odanın tamamı dinlenemez. Anahtar eklenince tüm odalar dinlenir.`,
+    );
+  }
+  if (watch.rateLimited) {
+    warnings.push(
+      `İmzalama kotası doldu (${watch.rateLimitHits ?? 0} bağlantı reddedildi); dinleme durdu. ` +
+        (watch.signedWithKey ? "EulerStream plan/kotası yükseltilmeli." : "EULER_API_KEY ekleyin."),
+    );
+  } else if ((watch.rateLimitHits ?? 0) > 0) {
+    warnings.push(
+      `Ücretsiz imzalama kotası ${watch.rateLimitHits} kez doldu; reddedilen odalar bekletilip yeniden denendi.`,
+    );
+  }
+  if (watch.connected === 0 && (watch.requested ?? 0) > 0) {
+    warnings.push(`Hiçbir odaya bağlanılamadı (${watch.requested} oda denendi, ${watch.failed ?? 0} hata).`);
+  }
+  return warnings;
+}
+
+/**
  * Odalara paralel bağlanır ve süre boyunca zarf mesajlarını toplar.
  *
  * Dönen değer kanıt niteliğindedir: kaç odaya bağlanıldı, kaç protokol mesajı

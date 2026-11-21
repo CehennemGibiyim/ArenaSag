@@ -225,6 +225,44 @@
     return Math.floor(m / 60) + "h" + String(m % 60).padStart(2, "0");
   }
 
+  /**
+   * WebSocket zarf dinleme özeti. Uyarı metinleri sunucuda
+   * (`envelopeWarnings`) üretilir, burada tekrar edilmez. `watch` yoksa veri
+   * eski biçimdedir: durum "bilinmiyor" denir, sayı uydurulmaz.
+   */
+  function watchSummary(snapshot) {
+    var watch = snapshot && snapshot.watch ? snapshot.watch : null;
+    var warnings = snapshot && Array.isArray(snapshot.warnings) ? snapshot.warnings : [];
+    if (!watch) {
+      return {
+        known: false,
+        rooms: 0,
+        requested: 0,
+        envelopes: 0,
+        keyed: false,
+        rateLimited: false,
+        label: "WS durumu bilinmiyor",
+        warnings: warnings.length ? warnings : ["Bu veride WebSocket dinleme durumu yok (eski radar çıktısı)."],
+      };
+    }
+    var rooms = Number(watch.connected) || 0;
+    var requested = Number(watch.requested) || 0;
+    var envelopes = Number(watch.envelopes) || 0;
+    var keyed = Boolean(watch.signedWithKey);
+    var rateLimited = Boolean(watch.rateLimited);
+    return {
+      known: true,
+      rooms: rooms,
+      requested: requested,
+      envelopes: envelopes,
+      keyed: keyed,
+      rateLimited: rateLimited,
+      label: "WS " + rooms + "/" + requested + " oda · " + envelopes + " zarf · " +
+        (rateLimited ? "kota doldu" : keyed ? "anahtarlı imza" : "ücretsiz imza"),
+      warnings: warnings,
+    };
+  }
+
   global.ArenaData = {
     REPO: REPO,
     RAW: RAW,
@@ -242,6 +280,7 @@
     tabCounts: tabCounts,
     tabById: tabById,
     ageSeconds: ageSeconds,
+    watchSummary: watchSummary,
     formatNumber: formatNumber,
     formatDuration: formatDuration,
     clock: clock,

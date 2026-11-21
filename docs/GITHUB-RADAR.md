@@ -69,6 +69,15 @@ GitHub Actions (cron */5)
 - `version.json` içindeki `dataVersion`, verinin üretim zamanıdır; Windows uygulaması değişikliği buradan algılar.
 - `stale`, `dataAgeMinutes` ve `health` alanları verinin tazeliğini bildirir. Tarama
   boş/hatalıysa devre kesici son iyi veriyi `stale: true` ile 24 saate kadar yayında tutar.
+- `watch` nesnesi WebSocket zarf dinlemesini özetler: `requested` (denenen oda),
+  `connected` (bağlanan oda), `failed`, `seconds` (dinleme süresi), `envelopes`
+  (yakalanan zarf), `rateLimited`/`rateLimitHits` (imzalama kotası), `signedWithKey`
+  (`EULER_API_KEY` kullanıldı mı), `messageTypes` (çözülen protokol mesajları).
+  `health.wsRooms/wsRequested/wsEnvelopes/wsMessages/wsSignedWithKey/wsRateLimited`
+  `version.json` için aynı sayıların kısa hâlidir; tam kayıt `watch` nesnesidir.
+- `warnings` dizisi insan tarafından okunacak uyarıları taşır; `EULER_API_KEY` yoksa,
+  dinleme kapalıysa veya kota dolduysa boş kalmaz. Panel bu satırları uyarı kutusu olarak gösterir;
+  uyarı sessizce yutulmaz.
 
 ## Veri sözleşmesi
 

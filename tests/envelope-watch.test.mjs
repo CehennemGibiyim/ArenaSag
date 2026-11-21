@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bagReward, envelopeReward } from "../scripts/envelope-watch.mjs";
+import { bagReward, envelopeWarnings, envelopeReward } from "../scripts/envelope-watch.mjs";
 
 const now = () => Math.floor(Date.now() / 1000) + 120;
 
@@ -49,6 +49,50 @@ test("mektup kapsayıcısı letter olarak işaretlenir", () => {
   const reward = envelopeReward(letter, "7300000000000000009");
   assert.equal(reward.envelopeId, "letter:55");
   assert.equal(reward.skinId, 0);
+});
+
+test("anahtarsız imzalama ve kapalı dinleyici uyarı olarak döner", () => {
+  const watch = {
+    requested: 60,
+    connected: 12,
+    failed: 0,
+    seconds: 300,
+    envelopes: [],
+    rateLimited: false,
+    rateLimitHits: 0,
+    signedWithKey: false,
+    messageTypes: {},
+  };
+  const warnings = envelopeWarnings(watch, { rooms: 60, seconds: 300 });
+  assert.ok(warnings.some((line) => line.includes("EULER_API_KEY")), warnings.join(" | "));
+  assert.deepEqual(envelopeWarnings(null, { enabled: false }), [
+    "WebSocket zarf dinleyicisi kapalı (ARENA_ENVELOPE_ROOMS=0).",
+  ]);
+  assert.ok(envelopeWarnings(null, { seconds: 0 })[0].includes("çalışmadı"));
+});
+
+test("kota dolduğunda dinlemenin durduğu açıkça söylenir", () => {
+  const watch = {
+    requested: 60,
+    connected: 0,
+    failed: 12,
+    seconds: 40,
+    envelopes: [],
+    rateLimited: true,
+    rateLimitHits: 12,
+    signedWithKey: true,
+    messageTypes: {},
+  };
+  const warnings = envelopeWarnings(watch, { rooms: 60, seconds: 40, apiKey: true });
+  assert.ok(warnings.some((line) => line.includes("kota")), warnings.join(" | "));
+  assert.ok(warnings.some((line) => line.includes("bağlanılamadı")), warnings.join(" | "));
+  assert.deepEqual(
+    envelopeWarnings(
+      { ...watch, connected: 60, failed: 0, rateLimited: false, rateLimitHits: 0 },
+      { rooms: 60, apiKey: true },
+    ),
+    [],
+  );
 });
 
 test("koin çantası işaretlenir, fan kulübü çantası reddedilir", () => {

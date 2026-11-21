@@ -34,6 +34,36 @@ test("yanlış şema sürümü reddedilir", () => {
   assert.ok(validateSnapshot(data).some((problem) => problem.includes("schema")));
 });
 
+test("watch ve uyarı alanları sözleşmede doğrulanır", () => {
+  const data = {
+    ...snapshot(),
+    warnings: ["EULER_API_KEY yok: WebSocket imzalaması ücretsiz kotada."],
+    watch: {
+      requested: 60,
+      connected: 12,
+      failed: 0,
+      seconds: 300,
+      envelopes: 1,
+      rateLimited: false,
+      rateLimitHits: 0,
+      signedWithKey: false,
+      messageTypes: { WebcastEnvelopeMessage: 2 },
+    },
+  };
+  assert.deepEqual(validateSnapshot(data), []);
+  assert.ok(validateSnapshot({ ...data, warnings: "uyarı" }).some((problem) => problem.includes("warnings")));
+  assert.ok(
+    validateSnapshot({ ...data, watch: { ...data.watch, signedWithKey: "hayır" } }).some((problem) =>
+      problem.includes("watch.signedWithKey"),
+    ),
+  );
+  assert.ok(
+    validateSnapshot({ ...data, watch: { ...data.watch, connected: undefined } }).some((problem) =>
+      problem.includes("watch.connected"),
+    ),
+  );
+});
+
 test("üye defteri biçimi doğrulanır", () => {
   const valid = {
     schema: 1,

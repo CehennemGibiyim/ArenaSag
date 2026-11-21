@@ -53,7 +53,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateRoster, validateSnapshot } from "./radar-contract.mjs";
-import { watchEnvelopes } from "./envelope-watch.mjs";
+import { envelopeWarnings, watchEnvelopes } from "./envelope-watch.mjs";
 import { mirrorToSupabase } from "./supabase-mirror.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -863,6 +863,15 @@ const newestVerified = streamList.reduce((latest, row) => {
   return Number.isFinite(at) && at > latest ? at : latest;
 }, 0);
 const dataAgeMinutes = newestVerified ? Math.max(0, Math.round((NOW - newestVerified) / 60_000)) : null;
+// Dinleme durumu ve imzalama kotası panelde görünür olmalı; uyarılar sessizce
+// yutulmaz, `warnings` alanıyla yayınlanır.
+const wsWarnings = envelopeWarnings(watch, {
+  rooms: watchRooms.length,
+  enabled: ENVELOPE_ROOMS > 0,
+  seconds: watchSeconds,
+  apiKey: Boolean(process.env.EULER_API_KEY),
+});
+const wsRateLimited = Boolean(watch?.rateLimited) || (watch?.rateLimitHits ?? 0) > 0;
 const health = {
   ok: !stale,
   stale,
@@ -880,8 +889,11 @@ const health = {
   wsRooms: watch?.connected ?? 0,
   wsEnvelopes: watch?.envelopes.length ?? 0,
   wsMessages: Object.values(watch?.messageTypes ?? {}).reduce((sum, n) => sum + n, 0),
-  wsRateLimited: Boolean(watch?.rateLimited) || (watch?.rateLimitHits ?? 0) > 0,
+  wsRequested: watchRooms.length,
+  wsSignedWithKey: Boolean(watch?.signedWithKey),
+  wsRateLimited,
   wsRateLimitHits: watch?.rateLimitHits ?? 0,
+  wsWarnings: wsWarnings.length,
   errors: errors.length,
   roster: roster.streamers.length,
 };
@@ -896,6 +908,7 @@ const snapshot = {
   stale,
   dataAgeMinutes,
   health,
+  warnings: wsWarnings,
   stats: {
     candidates: candidates.size,
     checked: found.length,
@@ -994,4 +1007,5 @@ console.log(
     `üye defteri ${rosterSnapshot.total} (bugün +${roster.today.added}) · ${snapshot.scanSeconds}s`,
 );
 if (!mirrored.skipped) console.log(`[arena-radar] Supabase: ${mirrored.streamers} yayıncı · ${mirrored.chests} sandık · ${mirrored.errors} hata`);
+for (const warning of wsWarnings) console.log(`[arena-radar] WS uyarı: ${warning}`);
 for (const error of snapshot.errors) console.log(`[arena-radar] uyarı: ${error}`);

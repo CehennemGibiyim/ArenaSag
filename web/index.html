@@ -153,7 +153,11 @@
               <div><strong id="scanSeconds">—</strong><span>Tarama süresi</span></div>
               <div><strong id="scanErrors">—</strong><span>Kaynak uyarısı</span></div>
               <div><strong id="scanFresh">—</strong><span>Veri yaşı</span></div>
+              <div><strong id="scanWsRooms">—</strong><span>WS oda</span></div>
+              <div><strong id="scanWsEnvelopes">—</strong><span>WS zarf</span></div>
+              <div><strong id="scanWsQuota">—</strong><span>İmzalama</span></div>
             </div>
+            <div id="scanWsWarn"></div>
             <p class="lead" style="margin-top:14px;font-size:11px">
               Akış: aday yayıncılar → <b>user/room + check_alive</b> → <b>room/info</b> sandık zarfı → <code>web/data/arena-live.json</code> → GitHub Pages ve Windows Radar.
               Windows uygulaması ayrıca kendi IP'sinden yerel keşif turu çalıştırır; iki kaynak birleştirilir.
@@ -281,6 +285,15 @@
     el("scanSeconds").textContent = data.scanSeconds ? data.scanSeconds + " sn" : "—";
     el("scanErrors").textContent = (data.errors || []).length;
     el("scanFresh").textContent = D.ageSeconds(data) < 90 ? D.ageSeconds(data) + " sn" : Math.round(D.ageSeconds(data) / 60) + " dk";
+    var ws = D.watchSummary(data);
+    el("scanWsRooms").textContent = ws.known ? ws.rooms + "/" + ws.requested : "—";
+    el("scanWsEnvelopes").textContent = ws.known ? num(ws.envelopes) : "—";
+    var quota = el("scanWsQuota");
+    quota.textContent = !ws.known ? "—" : ws.rateLimited ? "kota doldu" : ws.keyed ? "anahtarlı" : "ücretsiz";
+    quota.style.color = !ws.known ? "" : ws.rateLimited ? "#ff9eb2" : ws.keyed ? "#2ee6a8" : "#ffd79b";
+    el("scanWsWarn").innerHTML = ws.warnings
+      .map(function (line) { return '<div class="banner" style="margin:8px 0 0">' + D.escapeHtml(line) + '</div>'; })
+      .join("");
     var scanChip = el("scanChip");
     var stale = D.ageSeconds(data) > 900;
     scanChip.textContent = stale ? "gecikti" : "aktif · " + new Date(data.generatedAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
