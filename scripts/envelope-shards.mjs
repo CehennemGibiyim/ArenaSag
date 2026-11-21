@@ -27,8 +27,8 @@ const integer = (value) => {
  * Canlı oda listesinden bu shard'a düşen dilimi seçer.
  *
  * Havuz, izleyiciye göre sıralı listenin ilk `rooms * shards` kaydıdır; kayıtlar
- * sırayla shard'lara dağıtılır. Böylece 4 shard × 30 oda = 120 oda dinlenir ve
- * aynı oda iki runner'da kota harcamaz.
+ * sırayla shard'lara dağıtılır. Ücretsiz kotada 4 × 15 = 60, anahtarlı modda
+ * 4 × 30 = 120 oda dinlenir; aynı oda iki runner'da kota harcamaz.
  */
 export function shardRooms(streams, { shard = 0, shards = 1, rooms = 0 } = {}) {
   const total = Math.max(1, Math.round(Number(shards) || 1));
@@ -76,6 +76,7 @@ export function mergeShardWatches(results) {
     connected: 0,
     connectedRooms: 0,
     attempted: 0,
+    roomInfoEnvelopeRooms: 0,
     failed: 0,
     seconds: 0,
     rateLimited: false,
@@ -95,6 +96,7 @@ export function mergeShardWatches(results) {
     merged.connected += integer(watch.connected);
     merged.connectedRooms += integer(watch.connectedRooms);
     merged.attempted += integer(watch.attempted);
+    merged.roomInfoEnvelopeRooms += integer(watch.roomInfoEnvelopeRooms);
     merged.failed += integer(watch.failed);
     merged.seconds = Math.max(merged.seconds, integer(watch.seconds));
     merged.rateLimited = merged.rateLimited || watch.rateLimited === true;
@@ -122,6 +124,19 @@ export function mergeShardWatches(results) {
   }
   merged.shards = rows.length;
   return merged;
+}
+
+/** Her shard artifact'ından kapsam sayaçlarını çıkarır; birleşik watch'a eklenir. */
+export function shardCoverage(results) {
+  return list(results).map((row) => {
+    const watch = obj(obj(row).watch);
+    return {
+      shard: integer(obj(row).shard),
+      attempted: integer(watch.attempted),
+      connectedRooms: integer(watch.connectedRooms),
+      roomInfoEnvelopeRooms: integer(watch.roomInfoEnvelopeRooms),
+    };
+  });
 }
 
 /**

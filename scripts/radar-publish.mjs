@@ -55,7 +55,7 @@ import { fileURLToPath } from "node:url";
 import { validateRoster, validateSnapshot } from "./radar-contract.mjs";
 import { envelopeSchemaState, envelopeWarnings, watchEnvelopes } from "./envelope-watch.mjs";
 import { createEnvelopeNotifier } from "./radar-notify.mjs";
-import { mergeShardWatches, readShardResults } from "./envelope-shards.mjs";
+import { mergeShardWatches, readShardResults, shardCoverage } from "./envelope-shards.mjs";
 import { applyChestReward } from "./chest-record.mjs";
 import { mirrorToSupabase } from "./supabase-mirror.mjs";
 
@@ -630,6 +630,7 @@ const previousChests = new Map(
 const shardDir = process.env.ARENA_SHARD_DIR || "";
 const shardResults = shardDir ? await readShardResults(shardDir) : [];
 const shardWatch = mergeShardWatches(shardResults);
+const shardStats = shardCoverage(shardResults);
 if (shardDir) {
   console.log(
     `[arena-radar] matris dinlemesi: ${shardResults.length} artifact · ` +
@@ -909,6 +910,7 @@ const health = {
   wsMessages: Object.values(watch?.messageTypes ?? {}).reduce((sum, n) => sum + n, 0),
   wsRequested: watch?.requested ?? watchRooms.length,
   wsShards: shardResults.length,
+  wsShardCoverage: shardStats,
   wsSignedWithKey: Boolean(watch?.signedWithKey),
   wsRateLimited,
   wsRateLimitHits: watch?.rateLimitHits ?? 0,
@@ -971,6 +973,8 @@ const snapshot = {
         cooldownUntil: watch.cooldownUntil ?? null,
         cooldownSeconds: watch.cooldownSeconds ?? 0,
         cooldownWaits: watch.cooldownWaits ?? 0,
+        // Shard başına denenen/bağlanan/room-info zarfı çıkan oda sayıları.
+        ...(shardStats.length ? { shardCoverage: shardStats } : {}),
         messageTypes: Object.fromEntries(
           Object.entries(watch.messageTypes).sort((a, b) => b[1] - a[1]).slice(0, 12),
         ),

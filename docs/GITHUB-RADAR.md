@@ -69,10 +69,14 @@ GitHub Actions (cron */5)
 - `version.json` içindeki `dataVersion`, verinin üretim zamanıdır; Windows uygulaması değişikliği buradan algılar.
 - `stale`, `dataAgeMinutes` ve `health` alanları verinin tazeliğini bildirir. Tarama
   boş/hatalıysa devre kesici son iyi veriyi `stale: true` ile 24 saate kadar yayında tutar.
-- `watch` nesnesi WebSocket zarf dinlemesini özetler: `requested` (denenen oda),
-  `connected` (bağlanan oda), `failed`, `seconds` (dinleme süresi), `envelopes`
-  (yakalanan zarf), `rateLimited`/`rateLimitHits` (imzalama kotası), `signedWithKey`
-  (`EULER_API_KEY` kullanıldı mı), `messageTypes` (çözülen protokol mesajları).
+- `watch` nesnesi WebSocket zarf dinlemesini özetler: `requested` (istenen oda),
+  `attempted` (bağlantı denemesi), `connected`/`connectedRooms` (bağlantı/benzersiz
+  oda), `failed`, `seconds` (dinleme süresi), `envelopes` (yakalanan zarf),
+  `roomInfoEnvelopeRooms` (yalnızca bağlantı anındaki oda verisinden zarf çıkan oda),
+  `rateLimited`/`rateLimitHits` (imzalama kotası), `signedWithKey` (`EULER_API_KEY`
+  kullanıldı mı), `messageTypes` (çözülen protokol mesajları). Matris modunda
+  `shardCoverage` her shard için `attempted`, `connectedRooms` ve
+  `roomInfoEnvelopeRooms` taşır; `health.wsShardCoverage` aynı dizidir.
   Kota beklemesi de görünürdür: `cooldownUntil` (yeniden deneme anı, ISO),
   `cooldownSeconds` (son bekleme penceresi) ve `cooldownWaits` (turda kaç kez beklendiği).
   Panel "kota doldu" demek yerine bu andan geri sayar; süre bitince beklemenin
@@ -179,28 +183,33 @@ iş GitHub Actions matrisine bölünür:
 ```
 radar.yml
   ├─ shard (matrix: 0..3, paralel)   her runner kendi IP'si + kendi kotası
-  │     önceki arena-live.json'dan kendine düşen 30 odayı dinler
-  │     5'erli turlar, oda başına 30 sn (--hold) · sonuç: envelope-shard-<n>.json
+  │     önceki arena-live.json'dan kendine düşen 15 odayı dinler
+  │     (anahtarlı modda 30) · tam pencere · sonuç: envelope-shard-<n>.json
   └─ scan (needs: shard)             artifact'ları birleştirir
         ARENA_SHARD_DIR=web/data/shards · yerel WS dinleyici kapalı
         arena-live.json + roster.json + version.json yazar, yayınlar
 ```
 
 - Oda listesi önceki yayından alınır; shard'lar birbirini beklemez. Oda seçimi
-  `scripts/envelope-shards.mjs → shardRooms` (izleyiciye göre ilk `30 × 4 = 120` oda,
-  sırayla bölünür; aynı oda iki runner'da kota harcamaz).
-- Bağlantı anında oda bilgisindeki zarflar okunur; oda başına kalma süresi
-  `--hold 30` ile sınırlıdır. Sandığı zaten odada duran oda için uzun beklemek
-  gerekmez; bağlantı kısa tutulduğu için aynı pencerede daha çok oda dolaşılır.
-- Her shard odaları 5'erli turlara bölüp kendi süresini dinler; `--hold` süresi
-  dolunca bağlantı kapanır ve sıradaki tura geçilir, böylece 30 oda 5 dakikada
-  dolaşılır. Kota reddi gelirse dinleyici odaları bekletip yeniden dener.
+  `scripts/envelope-shards.mjs → shardRooms` (ücretsiz modda izleyiciye göre ilk
+  `15 × 4 = 60`, anahtarlı modda `30 × 4 = 120` oda sırayla bölünür; aynı oda iki
+  runner'da kota harcamaz).
+- Bağlantı anında connector'ın `fetchRoomInfoOnConnect` ile getirdiği oda verisi
+  okunur; ayrı bir `fetchRoomInfo` isteği yapılmaz. Ücretsiz imzalama kotası
+  bağlantı sayısını sınırlar: aynı 12 odada tam pencere 4 oda bağlarken kısa
+  bağlantı da 4 oda bağladı, üstelik kota reddi üretti. Bu yüzden ücretsiz modda
+  az oda bağlanır ve kalan pencere aynı odalarda dinlemeye ayrılır; anahtarlı
+  modda 30 oda tam pencere dinlenir.
+- Her shard odaları 5'erli turlara bölüp kendi süresini dinler. `--hold`
+  varsayılan olarak `0`dır (tüm tur); pozitif değer bağlantıyı erken kapatır,
+  fakat kısa bağlantı ek oda bağlamadığı için üretimde kullanılmaz.
 - Shard `arena-live.json` yazmaz, git'e dokunmaz. Birleştirme (`mergeShardWatches`)
   sayaçları toplar, zarfları kimliğe göre tekilleştirir; `signedWithKey` ancak tüm
   shard'lar anahtarlıysa true olur.
 - Artifact yoksa yayın durmaz; `warnings` alanına "matris dinleme artifact'ı
   bulunamadı" satırı düşer.
-- Ayarlar: `shard --rooms 30 --batch 5 --seconds 300 --hold 30 --shards 4`
+- Ayarlar: ücretsiz modda `--rooms 15`, anahtarlı modda `--rooms 30`;
+  ikisinde de `--batch 5 --seconds 300` ve varsayılan `--hold 0`
   (iş dosyasında), yerel deneme için `ARENA_SHARD_*` ortam değişkenleri.
 
 ## Veri dalı bakımı ve yedek

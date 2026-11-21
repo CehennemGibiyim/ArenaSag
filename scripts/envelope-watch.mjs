@@ -327,7 +327,8 @@ export async function watchEnvelopes({
   deadline = Date.now() + seconds * 1000,
   apiKey = process.env.EULER_API_KEY || "",
   // 0: her oda pencere sonuna kadar dinlenir. >0: oda başına en fazla bu kadar
-  // kalınır; ilk oda verisi zaten okunduğu için kısa bağlantı yeterlidir.
+  // kalınır. Ücretsiz kotada kısa bağlantı ek oda bağlamaz; anahtarlı/manual
+  // kullanımda bağlantı süresini sınırlamak için tutulur.
   holdSeconds = 0,
   // Yakalanan zarfı anında dışarı verir (GitHub Actions → Telegram/Discord).
   onEnvelope = null,
@@ -344,6 +345,8 @@ export async function watchEnvelopes({
     // ölçümünde gerçekten kaç odaya girildiğini bu sayaç gösterir.
     connectedRooms: 0,
     attempted: 0,
+    // Yalnızca bağlantı anındaki oda verisinden en az bir zarf çıkan odalar.
+    roomInfoEnvelopeRooms: 0,
     failed: 0,
     rateLimited: false,
     rateLimitHits: 0,
@@ -440,6 +443,7 @@ export async function watchEnvelopes({
   let index = 0;
   let cooldownUntil = 0;
   const connectedRoomIds = new Set();
+  const roomInfoEnvelopeRoomIds = new Set();
   // Kota hatası odayı kaybettirmez; pencere açılınca yeniden denenir.
   const attempts = new Map();
   const retry = (room) => {
@@ -475,7 +479,9 @@ export async function watchEnvelopes({
       let conn;
       try {
         conn = new TikTokLiveConnection(room.username || room.roomId, {
-          fetchRoomInfoOnConnect: false,
+          // Oda bilgisi bağlantı sırasında bir kez gelir; ayrıca fetchRoomInfo
+          // çağırmak gereksiz ikinci bir istek olurdu.
+          fetchRoomInfoOnConnect: true,
           processInitialData: true,
           enableExtendedGiftInfo: false,
           wsClientOptions: { handshakeTimeout: 12_000 },
@@ -513,11 +519,14 @@ export async function watchEnvelopes({
         // bağlanmadan önce açılmışsa yalnızca akışı beklemek onu kaçırırdı.
         // Oda bilgisi imzalama kotası harcamaz; hata dinlemeyi düşürmez.
         try {
-          const cached = obj(conn.roomInfo);
-          const info = Object.keys(cached).length ? cached : await conn.fetchRoomInfo(room.roomId);
-          for (const reward of roomEnvelopeRewards(info, room.roomId)) collect(reward, room);
+          const rewards = roomEnvelopeRewards(obj(conn.roomInfo), room.roomId);
+          if (rewards.length) {
+            roomInfoEnvelopeRoomIds.add(room.roomId);
+            result.roomInfoEnvelopeRooms = roomInfoEnvelopeRoomIds.size;
+          }
+          for (const reward of rewards) collect(reward, room);
         } catch {
-          /* oda bilgisi alınamadı; zarf yine WS akışından yakalanır */
+          /* oda bilgisi okunamadı; zarf yine WS akışından yakalanır */
         }
         log(`dinleniyor: ${room.username || room.roomId} (${room.roomId})`);
         const holdUntil = Date.now() + connectionHoldMs(deadline, holdSeconds);

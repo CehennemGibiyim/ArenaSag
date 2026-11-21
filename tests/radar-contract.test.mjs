@@ -55,39 +55,21 @@ test("watch ve uyarı alanları sözleşmede doğrulanır", () => {
   };
   assert.deepEqual(validateSnapshot(data), []);
   assert.ok(validateSnapshot({ ...data, warnings: "uyarı" }).some((problem) => problem.includes("warnings")));
-  assert.ok(
-    validateSnapshot({ ...data, watch: { ...data.watch, signedWithKey: "hayır" } }).some((problem) =>
-      problem.includes("watch.signedWithKey"),
-    ),
-  );
-  assert.ok(
-    validateSnapshot({ ...data, watch: { ...data.watch, connected: undefined } }).some((problem) =>
-      problem.includes("watch.connected"),
-    ),
-  );
-  assert.ok(
-    validateSnapshot({ ...data, watch: { ...data.watch, cooldownUntil: "yarın" } }).some((problem) =>
-      problem.includes("watch.cooldownUntil"),
-    ),
-  );
-  assert.ok(
-    validateSnapshot({ ...data, watch: { ...data.watch, cooldownWaits: "çok" } }).some((problem) =>
-      problem.includes("watch.cooldownWaits"),
-    ),
-  );
-  // Kota alanları zorunlu: eksik watch panelin geri sayımını sessizce bozar.
-  const withoutWaits = { ...data.watch };
-  delete withoutWaits.cooldownWaits;
-  assert.ok(
-    validateSnapshot({ ...data, watch: withoutWaits }).some((problem) => problem.includes("watch.cooldownWaits")),
-    "eksik cooldownWaits yakalanmalı",
-  );
-  assert.ok(
-    validateSnapshot({ ...data, watch: { ...data.watch, cooldownUntil: null } }).every((problem) =>
-      !problem.includes("watch.cooldownUntil"),
-    ),
-    "null cooldownUntil geçerli olmalı",
-  );
+
+  const watchProblems = (patch) => validateSnapshot({ ...data, watch: { ...data.watch, ...patch } });
+  const hasProblem = (problems, key) => problems.some((problem) => problem.includes(key));
+  // Kota alanları zorunlu: eksik/bozuk watch panelin geri sayımını sessizce bozar.
+  const invalidWatch = [
+    [{ signedWithKey: "hayır" }, "watch.signedWithKey"],
+    [{ connected: undefined }, "watch.connected"],
+    [{ cooldownUntil: "yarın" }, "watch.cooldownUntil"],
+    [{ cooldownWaits: "çok" }, "watch.cooldownWaits"],
+    [{ cooldownWaits: undefined }, "watch.cooldownWaits"],
+  ];
+  for (const [patch, key] of invalidWatch) {
+    assert.ok(hasProblem(watchProblems(patch), key), key);
+  }
+  assert.ok(!hasProblem(watchProblems({ cooldownUntil: null }), "watch.cooldownUntil"), "null cooldownUntil geçerli olmalı");
 });
 
 test("üye defteri biçimi doğrulanır", () => {

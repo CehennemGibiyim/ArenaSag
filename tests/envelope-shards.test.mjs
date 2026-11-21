@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { mergeShardWatches, readShardResults, shardRooms } from "../scripts/envelope-shards.mjs";
+import { mergeShardWatches, readShardResults, shardCoverage, shardRooms } from "../scripts/envelope-shards.mjs";
 
 const streams = (count) =>
   Array.from({ length: count }, (_, index) => ({
@@ -19,6 +19,7 @@ const watch = (overrides = {}) => ({
   connected: 3,
   connectedRooms: 3,
   attempted: 4,
+  roomInfoEnvelopeRooms: 2,
   failed: 1,
   seconds: 100,
   rateLimited: false,
@@ -75,6 +76,7 @@ test("shard sonuçları tek watch kaydında birleşir", () => {
   assert.equal(merged.connected, 6);
   assert.equal(merged.connectedRooms, 6);
   assert.equal(merged.attempted, 8);
+  assert.equal(merged.roomInfoEnvelopeRooms, 4);
   assert.equal(merged.failed, 2);
   assert.equal(merged.seconds, 120);
   assert.equal(merged.rateLimitHits, 2);
@@ -96,6 +98,18 @@ test("kota beklemesi shard'lardan birleşir", () => {
   assert.equal(merged.cooldownSeconds, 35);
   assert.equal(merged.cooldownUntil, "2026-01-01T12:01:00.000Z");
   assert.equal(mergeShardWatches([{ watch: watch() }]).cooldownUntil, null);
+});
+
+test("shard kapsamı denenen, bağlanan ve room-info zarfı çıkan odaları ayırır", () => {
+  const coverage = shardCoverage([
+    { shard: 0, watch: watch({ attempted: 15, connectedRooms: 12, roomInfoEnvelopeRooms: 3 }) },
+    { shard: 1, watch: watch({ attempted: 14, connectedRooms: 9, roomInfoEnvelopeRooms: 1 }) },
+  ]);
+  assert.deepEqual(coverage, [
+    { shard: 0, attempted: 15, connectedRooms: 12, roomInfoEnvelopeRooms: 3 },
+    { shard: 1, attempted: 14, connectedRooms: 9, roomInfoEnvelopeRooms: 1 },
+  ]);
+  assert.deepEqual(shardCoverage([]), []);
 });
 
 test("artifact okuma bozuk dosyayı atlar", async () => {

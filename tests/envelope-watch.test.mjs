@@ -283,6 +283,31 @@ test("60 odada bağlantı aralığı işçi başına sayılır, bütçe içinde 
   assert.equal(watch.connected, rooms.length);
 });
 
+test("ilk oda verisinden zarf çıkan oda sayılır", async () => {
+  class FakeConnection {
+    constructor() {
+      this.roomInfo = message();
+    }
+    on() {}
+    async connect() {
+      return { isConnected: true };
+    }
+    async disconnect() {}
+  }
+  const watch = await watchEnvelopes({
+    rooms: [{ roomId: "730000000000001001", username: "canli" }],
+    seconds: 1,
+    holdSeconds: 0.01,
+    sdk: {
+      TikTokLiveConnection: FakeConnection,
+      WebcastEvent: { ENVELOPE: "envelope" },
+      ControlEvent: { DECODED_DATA: "decodedData", ERROR: "error" },
+    },
+  });
+  assert.equal(watch.roomInfoEnvelopeRooms, 1);
+  assert.equal(watch.envelopes.length, 1);
+});
+
 test("koin çantası işaretlenir, fan kulübü çantası reddedilir", () => {
   const bag = {
     baseInfo: {

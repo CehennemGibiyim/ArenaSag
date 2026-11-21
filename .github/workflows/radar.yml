@@ -36,8 +36,10 @@ env:
 jobs:
   # Matris zarf dinlemesi: her runner kendi IP'si ve kendi ücretsiz imzalama
   # kotasıyla yalnızca kendine düşen odaları dinler, sonucu artifact bırakır.
-  # Bağlantı anındaki oda verisi okunduğu için odada kısa kalınır (--hold);
-  # böylece 4 × 30 = 120 oda aynı 5 dakikalık pencerede dolaşılır.
+  # Ücretsiz kota bağlantı sayısını sınırlar; kısa bağlantı daha çok oda
+  # bağlamadığı için ücretsiz modda 4 × 15 = 60 oda bağlanır ve kalan pencere
+  # odada dinlemeye ayrılır. Anahtarlı modda 4 × 30 = 120 oda tam pencere dinlenir;
+  # `--hold` yalnızca gerektiğinde bağlantı süresini kısaltan isteğe bağlı sınırdır.
   # arena-live.json'a yalnızca birleştirme işi (`scan`) yazar.
   shard:
     strategy:
@@ -86,9 +88,15 @@ jobs:
           ARENA_DISCORD_WEBHOOK_URL: ${{ secrets.ARENA_DISCORD_WEBHOOK_URL }}
         run: |
           sleep $((RANDOM % 20))
+          # Ücretsiz kota bağlantı sayısını sınırlıyor: az oda bağlayıp kalan
+          # pencereyi dinlemeye ayır. Anahtar varsa daha çok oda bağlanır.
+          rooms=15
+          if [ -n "${EULER_API_KEY:-}" ]; then
+            rooms=30
+          fi
           node scripts/envelope-shard.mjs \
             --shard ${{ matrix.shard }} --shards 4 \
-            --rooms 30 --batch 5 --seconds 300 --hold 30 \
+            --rooms "$rooms" --batch 5 --seconds 300 \
             --from web/data/arena-live.json \
             --out "web/data/envelope-shard-${{ matrix.shard }}.json"
 

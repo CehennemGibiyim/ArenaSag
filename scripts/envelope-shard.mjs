@@ -3,21 +3,21 @@
  * Matris zarf dinleyicisi — bir runner, kendi IP'si, kendi imzalama kotası.
  *
  * GitHub Actions matrisi 4 runner'ı paralel çalıştırır; her biri önceki yayındaki
- * canlı oda listesinden kendine düşen 15 odayı dinler. Toplam 60 oda tek bir
- * IP'nin ücretsiz kotasına sığmadığı için iş bu şekilde bölünür.
+ * canlı oda listesinden kendine düşen odaları dinler. Ücretsiz imzalama kotası
+ * bağlantı sayısını sınırlar: 4 × 15 = 60 oda güvenli sınırdır ve kalan pencere
+ * bağlı odada dinlemeye ayrılır. Anahtar varsa 4 × 30 = 120 oda tam pencere dinlenir.
  *
- * Dinleyici her odada tüm pencereyi kapatmaz: odalar `--batch` büyüklüğünde
- * turlara ayrılır, her tur kendi süresini dinler ve bağlantılar serbest kalır.
- * `--hold` ile oda başına kalma süresi kısaltılır; bağlantı anındaki oda verisi
- * zaten okunduğu için kısa bağlantı yeterlidir ve aynı pencerede daha çok odaya
- * sıra gelir. Ücretsiz imzalama kotası aşılırsa dinleyici geri çekilir.
+ * Odalar `--batch` büyüklüğünde turlara ayrılır, her tur kendi süresini dinler.
+ * `--hold` isteğe bağlı bir üst sınırdır: 0 tüm turu dinler; pozitif değer
+ * bağlantıyı erken kapatır ve kısa bağlantı ek oda bağlamadığı için üretimde
+ * kullanılmaz. Ücretsiz kota aşılırsa dinleyici geri çekilir.
  *
  * Çıktı `arena-live.json` değildir: `envelope-shard-<n>.json` artifact'ıdır.
  * Git'e yazmaz, veritabanına dokunmaz; birleştirmeyi `radar-publish.mjs` yapar.
  *
  * Kullanım:
- *   node scripts/envelope-shard.mjs --shard 1 --shards 4 --rooms 30 --batch 5 \
- *     --seconds 300 --hold 30 --from web/data/arena-live.json
+ *   node scripts/envelope-shard.mjs --shard 1 --shards 4 --rooms 15 --batch 5 \
+ *     --seconds 300 --hold 0 --from web/data/arena-live.json
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
