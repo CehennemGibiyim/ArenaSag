@@ -1,3 +1,4 @@
+import type { RadarWatch } from "@/lib/radar-watch";
 import { bumpRoomChest, upsertLiveRoom } from "@/server/rooms";
 import { deriveChest, recordChest } from "@/server/chest";
 import { sendNotification } from "@/server/notify";
@@ -50,6 +51,8 @@ type RadarPayload = {
   stale?: boolean;
   streams?: RadarStream[];
   chests?: RadarChest[];
+  watch?: Partial<RadarWatch> | null;
+  warnings?: unknown;
 };
 
 export type RadarSyncResult = {
@@ -61,7 +64,34 @@ export type RadarSyncResult = {
   stale: boolean;
   syncedAt: string;
   error?: string;
+  // WebSocket zarf dinlemesi; panel sandık radarı sekmesinde gösterir.
+  watch: RadarWatch | null;
+  warnings: string[];
 };
+
+/** `watch` alanını eksik/bozuk değerlere karşı güvenli sayılara indirger. */
+function readWatch(value: unknown): RadarWatch | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Partial<RadarWatch>;
+  return {
+    requested: Number(row.requested ?? 0) || 0,
+    connected: Number(row.connected ?? 0) || 0,
+    failed: Number(row.failed ?? 0) || 0,
+    seconds: Number(row.seconds ?? 0) || 0,
+    envelopes: Number(row.envelopes ?? 0) || 0,
+    rateLimited: row.rateLimited === true,
+    rateLimitHits: Number(row.rateLimitHits ?? 0) || 0,
+    signedWithKey: row.signedWithKey === true,
+  };
+}
+
+function readWarnings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((line) => String(line ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
 
 const state = globalThis as typeof globalThis & {
   __arenaRadarSyncTimer?: ReturnType<typeof setTimeout | typeof setInterval>;
@@ -172,6 +202,8 @@ export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResu
       chests,
       stale: snapshotStale,
       syncedAt,
+      watch: readWatch(payload.watch),
+      warnings: readWarnings(payload.warnings),
     };
     return state.__arenaRadarLast;
   } catch (error) {
@@ -184,6 +216,8 @@ export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResu
       stale: false,
       syncedAt,
       error: (error as Error).message,
+      watch: null,
+      warnings: [],
     };
     return state.__arenaRadarLast;
   }

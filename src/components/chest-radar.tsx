@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge, Card, CardHeader, Progress, Sparkline } from "@/components/ui";
+import type { RadarWatchState } from "@/lib/radar-watch";
 import { formatNumber } from "@/lib/format";
 
 // Uyarı sesi bileşen dışında kurulur: render sırasında ref yazımı olmaz ve
@@ -293,6 +294,7 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
   const [sortOptions, setSortOptions] = useState<SortOption[]>([]);
   const [tabCounts, setTabCounts] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<{ chests: number; upcoming: number; claimed: number; coins: number; flowRooms: number; flowDiamonds: number } | null>(null);
+  const [radarWatch, setRadarWatch] = useState<RadarWatchState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("chest");
@@ -391,6 +393,39 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
     return () => clearInterval(timer);
   }, []);
 
+  // WebSocket zarf dinleme durumu radar senkronunun sonucudur; dakikada bir tazelenir.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const response = await fetch("/api/radar/sync", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = (await response.json()) as { last?: RadarWatchState | null };
+        if (cancelled) return;
+        setRadarWatch(
+          data.last
+            ? { watch: data.last.watch ?? null, warnings: data.last.warnings ?? [], error: data.last.error }
+            : null,
+        );
+      } catch (error) {
+        // Durum alınamazsa sessizce yutma: şerit nedeni gösterir, sandık listesi etkilenmez.
+        if (!cancelled) {
+          setRadarWatch({
+            watch: null,
+            warnings: [],
+            error: error instanceof Error ? error.message : "radar durumu alınamadı",
+          });
+        }
+      }
+    };
+    void pull();
+    const timer = setInterval(() => void pull(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     if (!notify) return;
     if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
@@ -432,6 +467,22 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
       !row.opensAt || new Date(row.opensAt).getTime() > now - 90_000);
     return live as Array<ChestRow | FlowRow>;
   }, [tab, chests, flows, now]);
+
+  const watchInfo = radarWatch?.watch ?? null;
+  const quotaLabel = !watchInfo
+    ? ""
+    : watchInfo.rateLimited
+      ? "imzalama kotası doldu"
+      : watchInfo.signedWithKey
+        ? "anahtarlı imza"
+        : "ücretsiz imza";
+  const quotaTone = !watchInfo
+    ? "text-white/45"
+    : watchInfo.rateLimited
+      ? "text-pink-200"
+      : watchInfo.signedWithKey
+        ? "text-emerald-200"
+        : "text-amber-200";
 
   if (mini) {
     return (
@@ -486,6 +537,42 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
             <p className="mt-1 text-[10px] text-white/35">{stat.hint}</p>
           </div>
         ))}
+      </div>
+
+      <div className="panel px-3.5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.13em] text-white/35">
+            <RadarIcon size={12} className="text-cyan-200/70" /> WebSocket zarf dinleme
+          </span>
+          {watchInfo ? (
+            <span className="text-[11px] tabular-nums text-white/55">
+              <b className="text-white">{watchInfo.connected}/{watchInfo.requested}</b> oda ·{" "}
+              <b className="text-white">{formatNumber(watchInfo.envelopes)}</b> zarf ·{" "}
+              <span className={quotaTone}>{quotaLabel}</span>
+            </span>
+          ) : (
+            <span className={radarWatch?.error ? "text-[11px] text-pink-200" : "text-[11px] text-white/40"}>
+              {!radarWatch ? "senkron bekleniyor" : radarWatch.error ? "senkron başarısız" : "dinleme kaydı yok"}
+            </span>
+          )}
+        </div>
+        {radarWatch && (radarWatch.error || radarWatch.warnings.length) ? (
+          <ul className="mt-2 space-y-1">
+            {radarWatch.error ? (
+              <li className="rounded-lg border border-pink-400/25 bg-pink-500/[0.08] px-2.5 py-1.5 text-[10.5px] leading-relaxed text-pink-100">
+                {radarWatch.error}
+              </li>
+            ) : null}
+            {radarWatch.warnings.map((line) => (
+              <li
+                key={line}
+                className="rounded-lg border border-amber-300/25 bg-amber-400/[0.07] px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-100"
+              >
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
 
       {error ? (
