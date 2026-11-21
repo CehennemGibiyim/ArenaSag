@@ -48,17 +48,11 @@ export function RadarWatchStrip({ className = "", compact = false }: { className
   const [state, setState] = useState<RadarWatchSnapshot | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  // Yaş etiketi dakikada bir tazelenir; aksi hâlde 5 dakikalık yoklamaya kadar
-  // "az önce" yazısı donuk kalırdı.
+  // Kota beklemesi varsa geri sayım saniyelik, yoksa yaş etiketi dakikalık
+  // tazelenir. Tek zamanlayıcı, iki ayrı interval'in çakışmasını önler.
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Kota beklemesi sürerken geri sayım saniye saniye güncellenir.
-  useEffect(() => {
-    if (!state?.watch?.cooldownUntil) return;
-    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    const intervalMs = state?.watch?.cooldownUntil ? 1_000 : 60_000;
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
     return () => clearInterval(timer);
   }, [state?.watch?.cooldownUntil]);
 
@@ -111,7 +105,34 @@ export function RadarWatchStrip({ className = "", compact = false }: { className
       son tarama {timeAgo(generatedAt)}
     </span>
   ) : null;
-
+  // Tam ve mini görünüm aynı sayıları/quota/yaşı paylaşır; yalnızca kota etiketi
+  // ve boş durum metni kısalır.
+  const summary = watch ? (
+    <>
+      <b className="text-white">{watch.connected}/{watch.requested}</b> oda ·{" "}
+      <b className="text-white">{formatNumber(watch.envelopes)}</b> zarf
+      {quota ? (
+        <>
+          {" · "}
+          <span className={quota.tone} title={quota.label}>
+            {compact ? quota.compact : quota.label}
+          </span>
+        </>
+      ) : null}
+      {age ? <> · {age}</> : null}
+    </>
+  ) : null;
+  const emptyText = !state
+    ? compact
+      ? "okunuyor"
+      : "veri okunuyor"
+    : state.error
+      ? compact
+        ? "alınamadı"
+        : "veri alınamadı"
+      : compact
+        ? "kayıt yok"
+        : "dinleme kaydı yok";
   // Mini radar penceresi dar: tek satır sayı + ilk uyarı, aynı veriden.
   if (compact) {
     return (
@@ -120,24 +141,10 @@ export function RadarWatchStrip({ className = "", compact = false }: { className
           <span className="inline-flex items-center gap-1 font-bold uppercase tracking-[0.12em] text-white/35">
             <RadarIcon size={10} className="text-cyan-200/70" /> WS zarf
           </span>
-          {watch ? (
-            <span className="text-white/55">
-              <b className="text-white">{watch.connected}/{watch.requested}</b> oda ·{" "}
-              <b className="text-white">{formatNumber(watch.envelopes)}</b> zarf
-              {quota ? (
-                <>
-                  {" · "}
-                  <span className={quota.tone} title={quota.label}>
-                    {quota.compact}
-                  </span>
-                </>
-              ) : null}
-              {age ? <> · {age}</> : null}
-            </span>
+          {summary ? (
+            <span className="text-white/55">{summary}</span>
           ) : (
-            <span className={state?.error ? "text-pink-200" : "text-white/40"}>
-              {!state ? "okunuyor" : state.error ? "alınamadı" : "kayıt yok"}
-            </span>
+            <span className={state?.error ? "text-pink-200" : "text-white/40"}>{emptyText}</span>
           )}
         </div>
         {state?.warnings[0] ? (
@@ -156,21 +163,11 @@ export function RadarWatchStrip({ className = "", compact = false }: { className
         <span className="inline-flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.13em] text-white/35">
           <RadarIcon size={12} className="text-cyan-200/70" /> WebSocket zarf dinleme
         </span>
-        {watch ? (
-          <span className="text-[11px] tabular-nums text-white/55">
-            <b className="text-white">{watch.connected}/{watch.requested}</b> oda ·{" "}
-            <b className="text-white">{formatNumber(watch.envelopes)}</b> zarf
-            {quota ? (
-              <>
-                {" · "}
-                <span className={quota.tone}>{quota.label}</span>
-              </>
-            ) : null}
-            {age ? <> · {age}</> : null}
-          </span>
+        {summary ? (
+          <span className="text-[11px] tabular-nums text-white/55">{summary}</span>
         ) : (
           <span className={state?.error ? "text-[11px] text-pink-200" : "text-[11px] text-white/40"}>
-            {!state ? "veri okunuyor" : state.error ? "veri alınamadı" : "dinleme kaydı yok"}
+            {emptyText}
           </span>
         )}
       </div>

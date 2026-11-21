@@ -53,7 +53,10 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateRoster, validateSnapshot } from "./radar-contract.mjs";
-import { envelopeWarnings, watchEnvelopes } from "./envelope-watch.mjs";
+import { envelopeSchemaState, envelopeWarnings, watchEnvelopes } from "./envelope-watch.mjs";
+import { createEnvelopeNotifier } from "./radar-notify.mjs";
+import { mergeShardWatches, readShardResults } from "./envelope-shards.mjs";
+import { applyChestReward } from "./chest-record.mjs";
 import { mirrorToSupabase } from "./supabase-mirror.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -486,18 +489,6 @@ function roomRewards(data, roomId) {
   return rewards;
 }
 
-/** businessType -> okunabilir ad (tik.tools: 1 sandık, 19 süper hayran, 20 spark). */
-const BUSINESS_LABELS = { 1: "coins", 19: "super_fan_box", 20: "spark_box" };
-
-function variantOf(skinId, container = "") {
-  if (/letter|parcel|mektup/i.test(container)) return { kind: "letter", variant: "letter" };
-  if (/goody|bag/i.test(container)) return { kind: "bag", variant: `l${Number(skinId) || 0}` };
-  if (Number(skinId) === 0) return { kind: "bag", variant: "l0" };
-  if (Number(skinId) === 2) return { kind: "chest", variant: "gold" };
-  if (Number(skinId) === 3) return { kind: "chest", variant: "hanging" };
-  return { kind: "chest", variant: "normal" };
-}
-
 async function roomInfo(roomId) {
   try {
     const params = new URLSearchParams({ aid: "1988", room_id: roomId });
@@ -632,6 +623,21 @@ const previousChests = new Map(
     .filter((chest) => chest && chest.envelopeId)
     .map((chest) => [str(chest.envelopeId, 80), chest]),
 );
+
+// Matris dinlemesi: her runner kendi IP kotasıyla ayrı odaları dinler ve
+// artifact bırakır. Burada yalnızca birleştirilir; matris modunda yerel
+// dinleyici açılmaz, böylece aynı odalar için kota iki kez harcanmaz.
+const shardDir = process.env.ARENA_SHARD_DIR || "";
+const shardResults = shardDir ? await readShardResults(shardDir) : [];
+const shardWatch = mergeShardWatches(shardResults);
+if (shardDir) {
+  console.log(
+    `[arena-radar] matris dinlemesi: ${shardResults.length} artifact · ` +
+      (shardWatch
+        ? `${shardWatch.connectedRooms}/${shardWatch.requested} oda bağlandı · ${shardWatch.envelopes.length} zarf`
+        : "sonuç yok"),
+  );
+}
 // Sandığı görülen odalar her turda önce taranır: sandık akışının en yoğun yeri.
 const hotRooms = new Set(
   previous.chests.map((chest) => roomKey(chest.roomId)).filter(Boolean),
@@ -646,14 +652,27 @@ const order = [...aliveIds]
 // asıl yakalama yolu budur.
 const watchRooms = order.slice(0, ENVELOPE_ROOMS).map(([roomId, meta]) => ({ ...meta, roomId }));
 const watchSeconds = Math.min(ENVELOPE_SECONDS, Math.max(0, Math.round((DEADLINE - Date.now()) / 1000)));
+// Zarf yakalandığı anda haber verilir: panel senkronu ve Pages yayını beklenmez.
+// Adres yalnızca secret'tan gelir; aynı zarf bir kez, koşu başına en fazla dört
+// mesaj gönderilir (kota sınırlı turlarda bildirim spam'i olmaz).
+const notifier = createEnvelopeNotifier({
+  // Shard'ların yakaladığı zarfı birleştirme işi ikinci kez bildirmez.
+  known: [
+    ...previousChests.keys(),
+    ...(shardWatch?.envelopes ?? []).map((row) => str(row?.envelopeId, 80)).filter(Boolean),
+  ],
+  context: { requested: watchRooms.length, signedWithKey: Boolean(process.env.EULER_API_KEY) },
+  log: (line) => console.log(`[arena-radar] ${line}`),
+});
 const watchPromise =
-  watchRooms.length && watchSeconds >= 20
+  !shardDir && watchRooms.length && watchSeconds >= 20
     ? watchEnvelopes({
         rooms: watchRooms,
         seconds: watchSeconds,
         // Ücretsiz imzalama dakikada birkaç bağlantıya izin verir; anahtar varsa tavan açılır.
         concurrency: process.env.EULER_API_KEY ? ENVELOPE_CONCURRENCY : Math.min(6, ENVELOPE_CONCURRENCY),
         apiKey: process.env.EULER_API_KEY || "",
+        onEnvelope: (reward, room) => notifier.offer(reward, room),
         log: (line) => console.log(`[arena-radar] ${line}`),
       }).catch((error) => ({ connected: 0, failed: 0, envelopes: [], messageTypes: {}, errors: [`ws: ${error instanceof Error ? error.message : "hata"}`], seconds: 0 }))
     : Promise.resolve(null);
@@ -664,39 +683,12 @@ const rounds = [];
 let roomsScanned = 0;
 
 const applyReward = (reward, stream) => {
-  if (reward.roomId && reward.roomId !== stream.roomId) return false;
-  const opensMs = reward.opensAt * 1000;
-  const previousRow = chests.get(reward.envelopeId);
-  const { kind, variant } = variantOf(reward.skinId, reward.container);
-  const nowIso = new Date().toISOString();
-  chests.set(reward.envelopeId, {
-    envelopeId: reward.envelopeId,
-    kind,
-    variant,
-    skinId: reward.skinId,
-    businessType: reward.businessType,
-    businessLabel: BUSINESS_LABELS[reward.businessType] ?? "coins",
-    labels: reward.container ? [reward.container] : [],
-    username: stream.username,
-    nickname: stream.nickname,
-    title: stream.title,
-    roomId: stream.roomId,
-    coins: reward.coins,
-    slots: reward.slots,
-    ratio: Math.round((reward.coins / Math.max(1, reward.slots)) * 100) / 100,
-    viewers: stream.viewers,
-    opensAt: new Date(opensMs).toISOString(),
-    // Sandığın süresi dolduktan sonra hâlâ odada durup durmadığını bilmek için
-    // durum ve son görülme zamanı tutulur; süre bitince kayıt silinmez.
-    status: opensMs > Date.now() ? "waiting" : "open",
-    detectedAt: previousRow?.detectedAt || nowIso,
-    lastSeenAt: nowIso,
-    seenCount: (integer(previousRow?.seenCount) || 0) + 1,
-    missingCount: 0,
-    closedAt: "",
-    openUrl: `https://www.tiktok.com/@${stream.username}/live`,
-    deepLink: `snssdk1233://live?room_id=${stream.roomId}`,
-  });
+  // Dönüşüm tek yerde (`chest-record.mjs`); replay testi aynı fonksiyonu çalıştırır.
+  const applied = applyChestReward(chests, reward, stream);
+  if (!applied) return false;
+  // `room/info` turunda ilk kez görülen zarf da anında bildirilir; WS yakalaması
+  // aynı kimliği daha önce verdiyse kuyruk tekrar göndermez.
+  if (applied.isNew) notifier.offer(reward, stream);
   return true;
 };
 
@@ -778,7 +770,9 @@ for (let round = 0; round < CHEST_ROUNDS && order.length; round += 1) {
 /*  WebSocket zarflarını sandık listesine işle                                 */
 /* -------------------------------------------------------------------------- */
 
-const watch = await watchPromise;
+const localWatch = await watchPromise;
+// Matris sonucu varsa esas kaynak odur; yoksa yerel dinleyici (matris dışı) kullanılır.
+const watch = shardWatch ?? localWatch;
 const wsEnvelopes = [];
 for (const reward of watch?.envelopes ?? []) {
   let meta = universe.get(reward.roomId);
@@ -806,6 +800,15 @@ for (const reward of watch?.envelopes ?? []) {
   }
 }
 for (const error of (watch?.errors ?? []).slice(0, 3)) errors.push(error);
+
+// Bekleyen bildirimler yayın yazılmadan önce bitirilir; sonuç tek satırda raporlanır.
+const notified = await notifier.settle();
+if (notified.sent || notified.failed || notified.skipped) {
+  console.log(
+    `[arena-radar] zarf bildirimi: ${notified.sent} gönderildi · ${notified.failed} başarısız · ` +
+      `${notified.skipped} atlandı (tekrar/sınır/açılışı geçmiş)`,
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Yayın ve sandık listesi                                                    */
@@ -865,12 +868,25 @@ const newestVerified = streamList.reduce((latest, row) => {
 const dataAgeMinutes = newestVerified ? Math.max(0, Math.round((NOW - newestVerified) / 60_000)) : null;
 // Dinleme durumu ve imzalama kotası panelde görünür olmalı; uyarılar sessizce
 // yutulmaz, `warnings` alanıyla yayınlanır.
-const wsWarnings = envelopeWarnings(watch, {
-  rooms: watchRooms.length,
-  enabled: ENVELOPE_ROOMS > 0,
-  seconds: watchSeconds,
-  apiKey: Boolean(process.env.EULER_API_KEY),
-});
+// Zarf şeması takibi: bilinmeyen tip ve 24 saat sessizlik, önceki yayının
+// `health` kaydıyla karşılaştırılarak raporlanır; ilk çalıştırma tabanı kurar.
+const envelopeTypes = envelopeSchemaState(watch?.messageTypes ?? {}, previous.health);
+const runAt = envelopeTypes.at;
+const wsWarnings =
+  shardDir && !shardResults.length
+    ? [
+        "Matris dinleme artifact'ı bulunamadı: bu turda hiçbir oda WebSocket'ten dinlenmedi. " +
+          "Shard işinin loguna bakın.",
+      ]
+    : envelopeWarnings(watch, {
+        rooms: watch?.requested ?? watchRooms.length,
+        enabled: Boolean(shardDir) || ENVELOPE_ROOMS > 0,
+        seconds: watch?.seconds ?? watchSeconds,
+        apiKey: Boolean(process.env.EULER_API_KEY),
+        lastSeenAt: envelopeTypes.lastSeenAt,
+        trackingSince: envelopeTypes.trackingSince,
+        sampleType: envelopeTypes.sampleType,
+      });
 const wsRateLimited = Boolean(watch?.rateLimited) || (watch?.rateLimitHits ?? 0) > 0;
 const health = {
   ok: !stale,
@@ -885,15 +901,27 @@ const health = {
   roomsAlive: aliveIds.size,
   roomsScanned,
   rounds: rounds.length,
-  // WebSocket kanıtı: kaç oda dinlendi, kaç zarf mesajı çözüldü, kaç zarf okundu.
+  // WebSocket kanıtı: kaç benzersiz odaya bağlanıldı, kaç zarf mesajı çözüldü, kaç zarf okundu.
   wsRooms: watch?.connected ?? 0,
+  wsConnectedRooms: watch?.connectedRooms ?? watch?.connected ?? 0,
+  wsAttempted: watch?.attempted ?? watch?.connected ?? 0,
   wsEnvelopes: watch?.envelopes.length ?? 0,
   wsMessages: Object.values(watch?.messageTypes ?? {}).reduce((sum, n) => sum + n, 0),
-  wsRequested: watchRooms.length,
+  wsRequested: watch?.requested ?? watchRooms.length,
+  wsShards: shardResults.length,
   wsSignedWithKey: Boolean(watch?.signedWithKey),
   wsRateLimited,
   wsRateLimitHits: watch?.rateLimitHits ?? 0,
+  // Kota beklemesi: panel "kota doldu" yerine yeniden deneme anını geri sayar.
+  wsCooldownUntil: watch?.cooldownUntil ?? null,
+  wsCooldownSeconds: watch?.cooldownSeconds ?? 0,
+  wsCooldownWaits: watch?.cooldownWaits ?? 0,
   wsWarnings: wsWarnings.length,
+  // Zarf şeması raporu: bilinmeyen tipler ve sessizlik takibi yayınlar arasında taşınır.
+  envelopeLastSeenAt: envelopeTypes.lastSeenAt,
+  envelopeTrackingSince: envelopeTypes.trackingSince,
+  envelopeSampleType: envelopeTypes.sampleType,
+  unknownEnvelopeTypes: envelopeTypes.unknown.map((row) => row.type).slice(0, 5),
   errors: errors.length,
   roster: roster.streamers.length,
 };
@@ -902,7 +930,7 @@ const snapshot = {
   schema: 1,
   source: "github-radar",
   repo: REPO,
-  generatedAt: new Date().toISOString(),
+  generatedAt: runAt,
   scanSeconds: Math.round((Date.now() - NOW) / 1000),
   nextScanHintSeconds: 600,
   stale,
@@ -930,14 +958,19 @@ const snapshot = {
   rounds,
   watch: watch
     ? {
-        requested: watchRooms.length,
+        requested: watch.requested ?? watchRooms.length,
         connected: watch.connected,
+        connectedRooms: watch.connectedRooms ?? watch.connected,
+        attempted: watch.attempted ?? watch.connected,
         failed: watch.failed,
         seconds: watch.seconds,
         envelopes: wsEnvelopes.length,
         rateLimited: Boolean(watch.rateLimited),
         rateLimitHits: watch.rateLimitHits ?? 0,
         signedWithKey: Boolean(watch.signedWithKey),
+        cooldownUntil: watch.cooldownUntil ?? null,
+        cooldownSeconds: watch.cooldownSeconds ?? 0,
+        cooldownWaits: watch.cooldownWaits ?? 0,
         messageTypes: Object.fromEntries(
           Object.entries(watch.messageTypes).sort((a, b) => b[1] - a[1]).slice(0, 12),
         ),

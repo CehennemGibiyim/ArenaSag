@@ -41,6 +41,53 @@ const roomKey = (value) => {
 };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
+/**
+ * Zarf ailesinin bilinen TikTok mesaj tipleri. Yeni bir tip bunların dışında
+ * görünürse şema sürüklenmesi uyarısı üretilir; adı tanınmayan bir aile üyesi
+ * (`Envelope`, `GoodyBag`, `Letter`, `Parcel`, `Chest`) de aynı uyarıyı tetikler.
+ */
+export const ENVELOPE_MESSAGE_TYPES = ["WebcastEnvelopeMessage", "WebcastGoodyBagMessage"];
+const ENVELOPE_TYPE_FAMILY = /envelope|goody.?bag|letter|parcel|chest/i;
+
+/**
+ * Zarf şeması takibini yayınlar arasında taşır: bu turda tip görülmediyse son
+ * görülme anı ve örnek tip önceki yayından devam eder; ilk çalıştırma sessizlik
+ * tabanını (`trackingSince`) kurar. Geçersiz eski değerler yok sayılır.
+ */
+export function envelopeSchemaState(messageTypes, previous = {}, now = Date.now()) {
+  const drift = envelopeTypeDrift(messageTypes);
+  const prev = obj(previous);
+  const iso = (value) => {
+    const parsed = Date.parse(String(value ?? ""));
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  };
+  const at = new Date(now).toISOString();
+  return {
+    ...drift,
+    at,
+    trackingSince: iso(prev.envelopeTrackingSince) || at,
+    lastSeenAt: drift.types.length ? at : iso(prev.envelopeLastSeenAt),
+    sampleType: drift.sampleType ?? (str(prev.envelopeSampleType, 80) || null),
+  };
+}
+
+/**
+ * Dinlemede görülen mesaj tiplerinden zarf ailesini ayırır: bilinen tipler ve
+ * tanınmayan (şema sürüklenmesi) tipler. Örnek tip, en çok görülen aile üyesidir.
+ */
+export function envelopeTypeDrift(messageTypes) {
+  const known = new Set(ENVELOPE_MESSAGE_TYPES.map((type) => type.toLowerCase()));
+  const rows = Object.entries(obj(messageTypes))
+    .map(([type, count]) => ({ type: String(type), count: Number(count) || 0 }))
+    .filter((row) => row.type && row.count > 0 && ENVELOPE_TYPE_FAMILY.test(row.type))
+    .sort((a, b) => b.count - a.count);
+  return {
+    types: rows.map((row) => row.type),
+    sampleType: rows[0]?.type ?? null,
+    unknown: rows.filter((row) => !known.has(row.type.toLowerCase())),
+  };
+}
+
 /** Zarfın açılış zamanı saniye cinsindendir; milisaniye gelirse normalize edilir. */
 function opensAtSeconds(value, now) {
   const raw = typeof value === "string" && value.trim() ? Number(value) : value;
@@ -125,13 +172,86 @@ export function bagReward(raw, fallbackRoomId = "") {
   };
 }
 
+const ROOM_ENVELOPE_KEYS = [
+  "envelopeInfo",
+  "envelope_info",
+  "envelopeList",
+  "envelope_list",
+  "envelope",
+];
+const ROOM_LETTER_KEYS = ["letterInfo", "letter_info"];
+const ROOM_PARCEL_KEYS = ["parcelInfo", "parcel_info"];
+const ROOM_BAG_KEYS = ["goodyBag", "goody_bag", "luckyBag", "lucky_bag"];
+
+const roomEntries = (value) =>
+  Array.isArray(value) ? value.slice(0, 20) : value && typeof value === "object" ? [value] : [];
+
+/**
+ * Bağlantı anındaki oda bilgisindeki (`room/info`) açık zarf alanlarını okur.
+ * Odaya girildiğinde zaten duran sandık/mektup/çanta böylece akışı beklemeden
+ * listeye girer; istek imzalama kotası harcamaz. Uydurma yok: alanlar
+ * `envelopeReward`/`bagReward` ile aynı doğrulamadan geçer.
+ */
+export function roomEnvelopeRewards(roomData, fallbackRoomId = "") {
+  const roots = [obj(roomData)];
+  const nested = obj(obj(roomData).data);
+  if (Object.keys(nested).length) roots.push(nested);
+  const rewards = [];
+  const seen = new Set();
+  const add = (reward) => {
+    if (!reward || seen.has(reward.envelopeId)) return;
+    seen.add(reward.envelopeId);
+    rewards.push(reward);
+  };
+  for (const root of roots) {
+    for (const key of ROOM_ENVELOPE_KEYS) {
+      for (const entry of roomEntries(root[key])) add(envelopeReward(entry, fallbackRoomId));
+    }
+    for (const key of ROOM_LETTER_KEYS) {
+      for (const entry of roomEntries(root[key])) add(envelopeReward({ letterInfo: entry }, fallbackRoomId));
+    }
+    for (const key of ROOM_PARCEL_KEYS) {
+      for (const entry of roomEntries(root[key])) add(envelopeReward({ parcelInfo: entry }, fallbackRoomId));
+    }
+    for (const key of ROOM_BAG_KEYS) {
+      for (const entry of roomEntries(root[key])) add(bagReward(entry, fallbackRoomId));
+    }
+  }
+  return rewards;
+}
+
+/**
+ * Bir odada ne kadar kalınacağını hesaplar. `holdSeconds = 0` pencere sonuna
+ * kadar beklemek demektir; kısa tutulduğunda bağlantı erken kapanır ve sıradaki
+ * odaya geçilir. Pencere sınırı hiçbir zaman aşılmaz.
+ */
+export function connectionHoldMs(deadline, holdSeconds, now = Date.now()) {
+  const remaining = Math.max(0, deadline - now);
+  if (!Number.isFinite(holdSeconds) || holdSeconds <= 0) return remaining;
+  return Math.min(remaining, Math.round(holdSeconds * 1000));
+}
+
 /**
  * Panelde ve `arena-live.json` içinde gösterilecek dinleme uyarıları.
  *
  * Sessiz yutma yok: dinleme kapalıysa, çalışmadıysa, imzalama anahtarı yoksa
  * veya kota dolduysa nedeni açık bir cümleyle döner.
  */
-export function envelopeWarnings(watch, { rooms = 0, enabled = true, seconds = 0, apiKey = false } = {}) {
+export function envelopeWarnings(
+  watch,
+  {
+    rooms = 0,
+    enabled = true,
+    seconds = 0,
+    apiKey = false,
+    // Son zarf tipinin görüldüğü an ve o anki örnek tip; 24 saat sessizlik
+    // kontrolü bu kayda dayanır (yayınlar arasında `health` alanında taşınır).
+    lastSeenAt = null,
+    trackingSince = null,
+    sampleType = null,
+    now = Date.now(),
+  } = {},
+) {
   if (!enabled) return ["WebSocket zarf dinleyicisi kapalı (ARENA_ENVELOPE_ROOMS=0)."];
   if (!watch) {
     return [`WebSocket zarf dinleyicisi bu turda çalışmadı (${seconds} sn dinleme penceresi yok).`];
@@ -151,12 +271,44 @@ export function envelopeWarnings(watch, { rooms = 0, enabled = true, seconds = 0
         (watch.signedWithKey ? "EulerStream plan/kotası yükseltilmeli." : "EULER_API_KEY ekleyin."),
     );
   } else if ((watch.rateLimitHits ?? 0) > 0) {
+    const waits = watch.cooldownWaits ?? 0;
     warnings.push(
-      `Ücretsiz imzalama kotası ${watch.rateLimitHits} kez doldu; reddedilen odalar bekletilip yeniden denendi.`,
+      `Ücretsiz imzalama kotası ${watch.rateLimitHits} kez doldu; ` +
+        (waits > 0
+          ? `${waits} kez ${watch.cooldownSeconds ?? 0} sn beklenip yeniden denendi`
+          : "reddedilen odalar bekletilip yeniden denendi") +
+        ".",
     );
   }
   if (watch.connected === 0 && (watch.requested ?? 0) > 0) {
     warnings.push(`Hiçbir odaya bağlanılamadı (${watch.requested} oda denendi, ${watch.failed ?? 0} hata).`);
+  }
+
+  // Şema sürüklenmesi: tanınmayan zarf/çanta tipi girdiyse rapor örnek tipiyle
+  // birlikte uyarır. Sessizce yeni tipe düşmek, sandıkların görünmemesi demektir.
+  const drift = envelopeTypeDrift(watch.messageTypes);
+  if (drift.unknown.length) {
+    // Sayılar her turda değişebilir; uyarı imzası sabit kalsın diye yalnızca tip adları yazılır.
+    const detail = drift.unknown
+      .slice(0, 3)
+      .map((row) => row.type)
+      .join(", ");
+    warnings.push(
+      `Zarf şeması sürüklenmesi: bilinmeyen zarf/çanta mesaj tipi ${detail}. ` +
+        `Örnek: ${drift.unknown[0].type}. Dönüştürücü bu tipi tanımıyor; ` +
+        "ad değiştiyse scripts/envelope-watch.mjs içindeki ENVELOPE_MESSAGE_TYPES listesine ekleyin.",
+    );
+  }
+
+  // 24 saat sessizlik: dinleme çalışsa bile zarf tipi hiç gelmiyorsa tip adı
+  // değişmiş olabilir. İlk çalıştırmada taban `trackingSince` ile kurulur.
+  const silenceFrom = lastSeenAt || trackingSince;
+  const silenceMs = Date.parse(String(silenceFrom ?? ""));
+  if (Number.isFinite(silenceMs) && now - silenceMs >= 24 * 3_600_000) {
+    warnings.push(
+      `24 saattir hiç zarf/çanta mesaj tipi görülmedi (son örnek: ${sampleType || "bilinmiyor"}). ` +
+        "TikTok tip adını değiştirmiş olabilir; ham WebSocket mesaj tiplerini kontrol edin.",
+    );
   }
   return warnings;
 }
@@ -174,15 +326,33 @@ export async function watchEnvelopes({
   connectGapMs = 450,
   deadline = Date.now() + seconds * 1000,
   apiKey = process.env.EULER_API_KEY || "",
+  // 0: her oda pencere sonuna kadar dinlenir. >0: oda başına en fazla bu kadar
+  // kalınır; ilk oda verisi zaten okunduğu için kısa bağlantı yeterlidir.
+  holdSeconds = 0,
+  // Yakalanan zarfı anında dışarı verir (GitHub Actions → Telegram/Discord).
+  onEnvelope = null,
+  // Ham WebcastEnvelopeMessage karesini verir; fixture yakalama adımı buraya bağlanır.
+  onRawEnvelope = null,
+  // Test/ölçüm için connector enjeksiyonu; verilmezse SDK dinamik yüklenir.
+  sdk: providedSdk = null,
   log = () => {},
 } = {}) {
   const result = {
     requested: rooms.length,
     connected: 0,
+    // Benzersiz oda sayısı: yeniden denemeler `connected`i şişirir, bütçe
+    // ölçümünde gerçekten kaç odaya girildiğini bu sayaç gösterir.
+    connectedRooms: 0,
+    attempted: 0,
     failed: 0,
     rateLimited: false,
     rateLimitHits: 0,
     signedWithKey: Boolean(apiKey),
+    // Kota beklemesi: panel "kota doldu" demek yerine yeniden deneme anını
+    // geri sayabilsin diye bekleme penceresi de sonuca yazılır.
+    cooldownUntil: null,
+    cooldownSeconds: 0,
+    cooldownWaits: 0,
     envelopes: [],
     messageTypes: {},
     errors: [],
@@ -191,12 +361,14 @@ export async function watchEnvelopes({
   };
   if (!rooms.length || seconds <= 0) return result;
 
-  let sdk;
-  try {
-    sdk = await import("tiktok-live-connector");
-  } catch (error) {
-    result.errors.push(`connector yok: ${error instanceof Error ? error.message : "hata"}`);
-    return result;
+  let sdk = providedSdk;
+  if (!sdk) {
+    try {
+      sdk = await import("tiktok-live-connector");
+    } catch (error) {
+      result.errors.push(`connector yok: ${error instanceof Error ? error.message : "hata"}`);
+      return result;
+    }
   }
   const { TikTokLiveConnection, WebcastEvent, ControlEvent } = sdk;
   if (!TikTokLiveConnection) {
@@ -224,6 +396,8 @@ export async function watchEnvelopes({
   }
 
   const seen = new Set();
+  // Yakalama dosyası CLI çıkarken yarım kalmasın diye bekleyen yazmalar izlenir.
+  const capturePending = new Set();
   const targets = [];
   for (const room of rooms) {
     const roomId = roomKey(room.roomId);
@@ -233,15 +407,39 @@ export async function watchEnvelopes({
   }
 
   const startedAt = Date.now();
-  const collect = (reward) => {
+  // Ham kareyi yakalama adımına verir; dinlemeyi hiçbir zaman durdurmaz.
+  const captureRaw = (raw, room, method) => {
+    if (!raw || typeof onRawEnvelope !== "function") return;
+    try {
+      const pending = onRawEnvelope(raw, room, method);
+      if (pending && typeof pending.then === "function") {
+        const tracked = Promise.resolve(pending)
+          .catch((error) => log(`zarf yakalama hatası: ${error instanceof Error ? error.message : "hata"}`))
+          .finally(() => capturePending.delete(tracked));
+        capturePending.add(tracked);
+      }
+    } catch (error) {
+      log(`zarf yakalama hatası: ${error instanceof Error ? error.message : "hata"}`);
+    }
+  };
+  const collect = (reward, room = null) => {
     if (!reward || seen.size === 0) return;
     if (result.envelopes.some((row) => row.envelopeId === reward.envelopeId)) return;
     result.envelopes.push(reward);
     log(`zarf yakalandı: ${reward.envelopeId} · ${reward.coins} koin · ${reward.slots} kişi · oda ${reward.roomId}`);
+    // Bildirim hatası dinlemeyi durdurmaz; sadece nedeni log'a yazılır.
+    if (typeof onEnvelope === "function") {
+      try {
+        onEnvelope(reward, room);
+      } catch (error) {
+        log(`zarf bildirimi kuyruğa alınamadı: ${error instanceof Error ? error.message : "hata"}`);
+      }
+    }
   };
 
   let index = 0;
   let cooldownUntil = 0;
+  const connectedRoomIds = new Set();
   // Kota hatası odayı kaybettirmez; pencere açılınca yeniden denenir.
   const attempts = new Map();
   const retry = (room) => {
@@ -253,9 +451,15 @@ export async function watchEnvelopes({
   // kalan odaları tamamen bırakmaktan iyidir.
   const coolDown = async () => {
     cooldownUntil = Math.max(cooldownUntil, Date.now() + 35_000);
+    result.cooldownWaits += 1;
+    result.cooldownSeconds = Math.max(result.cooldownSeconds, Math.ceil((cooldownUntil - Date.now()) / 1000));
+    result.cooldownUntil = new Date(cooldownUntil).toISOString();
     await sleep(cooldownUntil - Date.now());
   };
   const worker = async () => {
+    // Aralık işçi başına sayılır: global sıra numarası, son odaları diğer
+    // işçiler çoktan iş bitirmiş olsa bile onlarca saniye boş yere bekletiyordu.
+    let slot = 0;
     // Anahtarlı imzalamada kota bittiğinde yeni bağlantı açmak boşuna; anahtarsız
     // modda dakikalık pencere beklenir.
     while (index < targets.length && Date.now() < deadline && !result.rateLimited) {
@@ -265,7 +469,8 @@ export async function watchEnvelopes({
       const position = index++;
       if (position >= targets.length) return;
       const room = targets[position];
-      await sleep(connectGapMs * position);
+      await sleep(connectGapMs * slot);
+      slot += 1;
       if (Date.now() >= deadline) return;
       let conn;
       try {
@@ -282,22 +487,41 @@ export async function watchEnvelopes({
         continue;
       }
 
-      conn.on(WebcastEvent?.ENVELOPE ?? "envelope", (raw) => collect(envelopeReward(raw, room.roomId)));
+      conn.on(WebcastEvent?.ENVELOPE ?? "envelope", (raw) => {
+        captureRaw(raw, room, "WebcastEnvelopeMessage");
+        collect(envelopeReward(raw, room.roomId), room);
+      });
       conn.on(ControlEvent?.DECODED_DATA ?? "decodedData", (method, raw) => {
         const name = String(method || "");
         result.messageTypes[name] = (result.messageTypes[name] || 0) + 1;
         const payload = obj(raw).data ?? raw;
-        if (/Envelope/i.test(name)) collect(envelopeReward(payload, room.roomId));
-        else if (/GoodyBag/i.test(name)) collect(bagReward(payload, room.roomId));
+        if (/Envelope/i.test(name)) {
+          captureRaw(payload, room, name);
+          collect(envelopeReward(payload, room.roomId), room);
+        } else if (/GoodyBag/i.test(name)) collect(bagReward(payload, room.roomId), room);
       });
       conn.on(ControlEvent?.ERROR ?? "error", () => null);
 
       try {
+        result.attempted += 1;
         const connected = await conn.connect(room.roomId);
         if (!connected?.isConnected) throw new Error("bağlantı doğrulanamadı");
         result.connected += 1;
+        connectedRoomIds.add(room.roomId);
+        result.connectedRooms = connectedRoomIds.size;
+        // Odaya girer girmez ilk oda verisindeki zarfları oku: sandık biz
+        // bağlanmadan önce açılmışsa yalnızca akışı beklemek onu kaçırırdı.
+        // Oda bilgisi imzalama kotası harcamaz; hata dinlemeyi düşürmez.
+        try {
+          const cached = obj(conn.roomInfo);
+          const info = Object.keys(cached).length ? cached : await conn.fetchRoomInfo(room.roomId);
+          for (const reward of roomEnvelopeRewards(info, room.roomId)) collect(reward, room);
+        } catch {
+          /* oda bilgisi alınamadı; zarf yine WS akışından yakalanır */
+        }
         log(`dinleniyor: ${room.username || room.roomId} (${room.roomId})`);
-        while (Date.now() < deadline) await sleep(Math.min(2_000, Math.max(0, deadline - Date.now())));
+        const holdUntil = Date.now() + connectionHoldMs(deadline, holdSeconds);
+        while (Date.now() < holdUntil) await sleep(Math.min(2_000, Math.max(0, holdUntil - Date.now())));
       } catch (error) {
         result.failed += 1;
         const message = error instanceof Error ? error.message : String(obj(error).message ?? "hata");
@@ -319,6 +543,7 @@ export async function watchEnvelopes({
   try {
     await Promise.all(Array.from({ length: Math.min(clamp(concurrency, 1, 40), targets.length) }, () => worker()));
   } finally {
+    if (capturePending.size) await Promise.allSettled([...capturePending]);
     result.seconds = Math.round((Date.now() - startedAt) / 1000);
   }
   return result;
@@ -329,7 +554,7 @@ export async function watchEnvelopes({
 /* -------------------------------------------------------------------------- */
 
 function parseArgs(argv) {
-  const args = { rooms: [], from: "", limit: 40, seconds: 180 };
+  const args = { rooms: [], from: "", limit: 40, seconds: 180, capture: "" };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const next = argv[i + 1];
@@ -337,13 +562,19 @@ function parseArgs(argv) {
     else if (flag === "--room") { args.rooms.push(next); i += 1; }
     else if (flag === "--rooms") { args.limit = Number(next); i += 1; }
     else if (flag === "--seconds") { args.seconds = Number(next); i += 1; }
+    else if (flag === "--capture") { args.capture = next; i += 1; }
   }
   return args;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { readFile } = await import("node:fs/promises");
+  const { createEnvelopeCapture } = await import("./envelope-capture.mjs");
   const args = parseArgs(process.argv.slice(2));
+  const captureFile = args.capture || process.env.ARENA_CAPTURE_ENVELOPE || "";
+  const capture = captureFile
+    ? createEnvelopeCapture(captureFile, { log: (line) => console.log(`[zarf] ${line}`) })
+    : null;
   const rooms = args.rooms.map((value) => {
     const [roomId, username] = String(value).split(":");
     return { roomId, username };
@@ -361,14 +592,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const watch = await watchEnvelopes({
     rooms,
     seconds: clamp(args.seconds, 10, 1800),
+    onRawEnvelope: capture,
     log: (line) => console.log(`[zarf] ${line}`),
   });
   console.log(
-    `[zarf] ${watch.connected}/${watch.requested} oda dinlendi · ${watch.seconds}s · ` +
-      `${watch.envelopes.length} zarf · ${watch.failed} bağlantı hatası`,
+    `[zarf] ${watch.connectedRooms}/${watch.requested} oda bağlandı · ${watch.seconds}s · ` +
+      `${watch.connected} bağlantı / ${watch.attempted} deneme · ${watch.envelopes.length} zarf · ${watch.failed} hata`,
   );
   console.log(`[zarf] mesaj tipleri: ${JSON.stringify(Object.entries(watch.messageTypes).sort((a, b) => b[1] - a[1]).slice(0, 10))}`);
   if (watch.envelopes.length) console.log(`[zarf] yakalananlar: ${JSON.stringify(watch.envelopes, null, 1)}`);
+  if (captureFile && !watch.envelopes.length) console.log(`[zarf] yakalama: gerçek zarf gelmedi, fixture değişmedi (${captureFile})`);
   for (const error of watch.errors.slice(0, 5)) console.log(`[zarf] uyarı: ${error}`);
   process.exit(watch.connected > 0 ? 0 : 1);
 }

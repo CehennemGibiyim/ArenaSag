@@ -47,6 +47,9 @@ test("watch ve uyarı alanları sözleşmede doğrulanır", () => {
       rateLimited: false,
       rateLimitHits: 0,
       signedWithKey: false,
+      cooldownUntil: "2026-01-01T12:00:30.000Z",
+      cooldownSeconds: 35,
+      cooldownWaits: 2,
       messageTypes: { WebcastEnvelopeMessage: 2 },
     },
   };
@@ -61,6 +64,29 @@ test("watch ve uyarı alanları sözleşmede doğrulanır", () => {
     validateSnapshot({ ...data, watch: { ...data.watch, connected: undefined } }).some((problem) =>
       problem.includes("watch.connected"),
     ),
+  );
+  assert.ok(
+    validateSnapshot({ ...data, watch: { ...data.watch, cooldownUntil: "yarın" } }).some((problem) =>
+      problem.includes("watch.cooldownUntil"),
+    ),
+  );
+  assert.ok(
+    validateSnapshot({ ...data, watch: { ...data.watch, cooldownWaits: "çok" } }).some((problem) =>
+      problem.includes("watch.cooldownWaits"),
+    ),
+  );
+  // Kota alanları zorunlu: eksik watch panelin geri sayımını sessizce bozar.
+  const withoutWaits = { ...data.watch };
+  delete withoutWaits.cooldownWaits;
+  assert.ok(
+    validateSnapshot({ ...data, watch: withoutWaits }).some((problem) => problem.includes("watch.cooldownWaits")),
+    "eksik cooldownWaits yakalanmalı",
+  );
+  assert.ok(
+    validateSnapshot({ ...data, watch: { ...data.watch, cooldownUntil: null } }).every((problem) =>
+      !problem.includes("watch.cooldownUntil"),
+    ),
+    "null cooldownUntil geçerli olmalı",
   );
 });
 

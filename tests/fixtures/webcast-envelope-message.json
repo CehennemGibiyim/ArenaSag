@@ -1,0 +1,54 @@
+{
+  "fixture": "webcast-envelope-message",
+  "source": {
+    "method": "WebcastEnvelopeMessage",
+    "event": "envelope",
+    "capturedFrom": "TikTok LIVE Webcast (public decoded frame)",
+    "origin": "https://github.com/NawfalHadi/custom-tiktok-overlay-with-tikfinity/blob/30c57f81cd627f7ff8878f845069f1d556326372/static/json/treasure_box.json",
+    "capturedAt": "2026-10-13T09:38:03.239Z",
+    "masked": [
+      "common.msgId",
+      "common.roomId",
+      "envelopeInfo.envelopeId",
+      "envelopeInfo.roomId",
+      "envelopeInfo.sendUserId",
+      "envelopeInfo.sendUserName",
+      "avatar URLs",
+      "common.displayText ve kullanıcı yükü (kırpıldı)"
+    ],
+    "note": "Gerçek yakalanmış kare; yalnızca kimlikler maskelendi, sayısal alanlar ve açılış zamanı korundu."
+  },
+  "payload": {
+    "common": {
+      "method": "WebcastEnvelopeMessage",
+      "msgId": "7000000000000000003",
+      "roomId": "7000000000000000002",
+      "createTime": "1791884283239",
+      "monitor": 0,
+      "isShowMsg": true,
+      "describe": "",
+      "foldType": "0",
+      "priorityScore": "0"
+    },
+    "envelopeInfo": {
+      "envelopeId": "7000000000000000001",
+      "businessType": 1,
+      "envelopeIdc": "my",
+      "sendUserName": "ornek_yayinci",
+      "diamondCount": 20,
+      "peopleCount": 16,
+      "unpackAt": 1791884462,
+      "sendUserId": "7000000000000000004",
+      "sendUserAvatar": {
+        "urlList": []
+      },
+      "createAt": "1791884283206",
+      "roomId": "7000000000000000002",
+      "followShowStatus": 1,
+      "skinId": 0,
+      "voteCount": 0,
+      "superFanCount": 0
+    },
+    "display": 1
+  }
+}

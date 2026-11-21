@@ -22,6 +22,9 @@
   .dot{width:6px;height:6px;border-radius:99px;background:#2ee6a8;box-shadow:0 0 10px #2ee6a8}
   .dot.warn{background:#ffa62b;box-shadow:0 0 10px #ffa62b}
   .dot.bad{background:#ff3b5c;box-shadow:0 0 10px #ff3b5c}
+  .pill.warn{border-color:rgba(255,166,43,.4);background:rgba(255,166,43,.08);color:#ffd79b}
+  .ws-warnings{display:grid;gap:5px;margin-top:8px}
+  .ws-warnings div{border:1px solid rgba(255,166,43,.3);background:rgba(255,166,43,.07);color:#ffd79b;border-radius:9px;padding:6px 9px;font-size:10.5px;line-height:1.5}
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-top:12px}
   .stat{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:11px;padding:8px 10px}
   .stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
@@ -91,8 +94,10 @@
     <span id="fresh">veri yükleniyor…</span>
     <span class="pill" id="soundPill" title="Uyarı sesi">🔔 ses açık</span>
     <span class="pill" id="discoveryPill" title="Yerel keşif turu">⟳ keşif —</span>
+    <span class="pill" id="wsPill" title="WebSocket zarf dinlemesi">🛰 WS —</span>
   </div>
   <div id="banners"></div>
+  <div class="ws-warnings" id="wsWarnings"></div>
 
   <div class="stats">
     <div class="stat"><b id="sChests">—</b><span>Sandık</span></div>
@@ -351,6 +356,35 @@
     document.getElementById("err").textContent = data.lastError ? "Veri alınamadı: " + data.lastError : "";
     document.getElementById("soundPill").textContent = data.config && data.config.sound ? "🔔 ses açık" : "🔕 ses kapalı";
 
+    var watch = data.snapshot && data.snapshot.watch ? data.snapshot.watch : null;
+    var wsPill = document.getElementById("wsPill");
+    if (watch) {
+      var connected = Number(watch.connected) || 0;
+      var requested = Number(watch.requested) || 0;
+      var envelopes = Number(watch.envelopes) || 0;
+      var untilMs = watch.cooldownUntil ? Date.parse(watch.cooldownUntil) : NaN;
+      var retryLeft = Number.isFinite(untilMs) ? Math.max(0, Math.ceil((untilMs - Date.now()) / 1000)) : null;
+      var quota = retryLeft !== null && retryLeft > 0
+        ? "yeniden deneme " + retryLeft + " sn"
+        : watch.rateLimited
+          ? "kota doldu · yeniden deneme yok"
+          : Number(watch.cooldownWaits) > 0
+            ? "ücretsiz imza · " + watch.cooldownWaits + " kez kota beklemesi (" + (Number(watch.cooldownSeconds) || 0) + " sn)"
+            : watch.signedWithKey ? "anahtarlı imza" : "ücretsiz imza";
+      wsPill.textContent = "🛰 WS " + connected + "/" + requested + " oda · " + D.fmt(envelopes) + " zarf · " + quota;
+      wsPill.className = "pill" + (watch.rateLimited || (retryLeft !== null && retryLeft > 0) ? " warn" : "");
+      wsPill.title = "WebSocket zarf dinlemesi: " + connected + " bağlı / " + requested + " denenen oda · " +
+        envelopes + " zarf yakalandı · " + quota;
+    } else {
+      wsPill.textContent = "🛰 WS kaydı yok";
+      wsPill.className = "pill";
+      wsPill.title = "Yayınlanan veride WebSocket dinleme kaydı yok";
+    }
+    var warnRows = data.snapshot && Array.isArray(data.snapshot.warnings) ? data.snapshot.warnings : [];
+    document.getElementById("wsWarnings").innerHTML = warnRows
+      .map(function (line) { return "<div>" + D.esc(line) + "</div>"; })
+      .join("");
+
     var banners = document.getElementById("banners");
     banners.innerHTML = "";
     var update = data.update || {};
@@ -478,6 +512,9 @@
   };
   document.getElementById("openWeb").onclick = function () {
     fetch("/api/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: "https://cehennemgibiyim.github.io/ArenaSag/sandik.html" }) });
+  };
+  document.getElementById("wsPill").onclick = function () {
+    window.open("https://cehennemgibiyim.github.io/ArenaSag/sandik.html", "_blank", "noopener");
   };
   document.getElementById("openPanel").onclick = function () {
     window.open("/panel/", "_blank", "noopener");

@@ -39,6 +39,11 @@ jobs:
     - name: Birim testleri (sandık kuralları)
       run: npm run test:unit
 
+    # Gerçek WebcastEnvelopeMessage karesi (maskelenmiş fixture) → sandık kaydı.
+    # Kotasız ve çevrimdışı; canlı dinleyiciye ihtiyaç duymaz.
+    - name: Zarf replay testi
+      run: node --test tests/envelope-replay.test.mjs
+
     - name: PostgreSQL scheduler smoke test
       env:
         DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/arena_smoke

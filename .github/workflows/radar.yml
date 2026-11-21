@@ -11,6 +11,9 @@ on:
     paths:
       - "scripts/radar-publish.mjs"
       - "scripts/envelope-watch.mjs"
+      - "scripts/envelope-shard.mjs"
+      - "scripts/envelope-shards.mjs"
+      - "scripts/radar-notify.mjs"
       - "scripts/radar-contract.mjs"
       - "scripts/supabase-mirror.mjs"
       - "scripts/data-changed.mjs"
@@ -31,7 +34,76 @@ env:
   DATA_BRANCH: data
 
 jobs:
+  # Matris zarf dinlemesi: her runner kendi IP'si ve kendi ücretsiz imzalama
+  # kotasıyla yalnızca kendine düşen odaları dinler, sonucu artifact bırakır.
+  # Bağlantı anındaki oda verisi okunduğu için odada kısa kalınır (--hold);
+  # böylece 4 × 30 = 120 oda aynı 5 dakikalık pencerede dolaşılır.
+  # arena-live.json'a yalnızca birleştirme işi (`scan`) yazar.
+  shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: WebSocket istemcisini kur
+        run: >
+          npm install --no-save --package-lock=false --no-audit --no-fund
+          tiktok-live-connector@2.5.0 tiktok-live-api-sdk@0.4.0-beta1
+
+      # Dinlenecek odalar önceki yayından alınır: shard'lar birbirini beklemeden
+      # paralel başlar ve aynı listeyi farklı dilimlerde dinler.
+      - name: Dinlenecek odaları al
+        run: |
+          set -euo pipefail
+          mkdir -p web/data
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$DATA_BRANCH"
+            git show "FETCH_HEAD:web/data/arena-live.json" > web/data/arena-live.json 2>/dev/null \
+              || rm -f web/data/arena-live.json
+            echo "Önceki canlı oda listesi alındı."
+          else
+            echo "Veri dalı yok; bu shard dinleyecek oda bulamayacak (birleştirme yine çalışır)."
+          fi
+
+      - name: Zarf dinle
+        env:
+          # Anahtar tanımlıysa shard kotası yükselir; tanımlı değilse kendi IP'sinin
+          # ücretsiz kotasıyla döner (reddedilen oda bekletilip yeniden denenir).
+          EULER_API_KEY: ${{ secrets.EULER_API_KEY }}
+          # Bildirim yakalama anında bu runner'dan gider; adres yalnızca secret'tan.
+          ARENA_TELEGRAM_BOT_TOKEN: ${{ secrets.ARENA_TELEGRAM_BOT_TOKEN }}
+          ARENA_TELEGRAM_CHAT_ID: ${{ secrets.ARENA_TELEGRAM_CHAT_ID }}
+          ARENA_DISCORD_WEBHOOK_URL: ${{ secrets.ARENA_DISCORD_WEBHOOK_URL }}
+        run: |
+          sleep $((RANDOM % 20))
+          node scripts/envelope-shard.mjs \
+            --shard ${{ matrix.shard }} --shards 4 \
+            --rooms 30 --batch 5 --seconds 300 --hold 30 \
+            --from web/data/arena-live.json \
+            --out "web/data/envelope-shard-${{ matrix.shard }}.json"
+
+      - name: Dinleme sonucunu artifact bırak
+        uses: actions/upload-artifact@v4
+        with:
+          name: envelope-shard-${{ matrix.shard }}
+          path: web/data/envelope-shard-${{ matrix.shard }}.json
+          retention-days: 1
+          if-no-files-found: error
+
   scan:
+    needs: shard
+    # Bir shard düşse de yayın durmasın: artifact'ı olan odalar birleştirilir.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -65,6 +137,18 @@ jobs:
             echo "Veri dalı henüz yok; ilk tarama oluşturacak."
           fi
 
+      - name: Matris dinleme sonuçlarını indir
+        uses: actions/download-artifact@v4
+        with:
+          pattern: envelope-shard-*
+          # Artifact'lar alt klasöre değil doğrudan shards/ içine insin;
+          # birleştirme `envelope-shard-*.json` dosyalarını orada arıyor.
+          merge-multiple: true
+          path: web/data/shards
+        # Hiç shard artifact'ı yoksa birleştirme yine çalışır; eksiklik
+        # `warnings` alanında açıkça görünür (sessiz yutulmaz).
+        continue-on-error: true
+
       - name: Canlı yayın ve sandık taraması
         env:
           # Sandık, tek turda 45 oda görülerek yakalanamaz: 1000 aday doğrulanır,
@@ -77,11 +161,11 @@ jobs:
           ARENA_BUDGET_SECONDS: "780"
           ARENA_VERIFY_CONCURRENCY: "10"
           ARENA_ROOM_CONCURRENCY: "12"
-          # Zarf yalnızca canlı akışta görünür: en yoğun 60 oda 5 dakika boyunca
-          # WebSocket'ten dinlenir, yakalanan sandık/mektup aynı listeye yazılır.
-          ARENA_ENVELOPE_ROOMS: "60"
-          ARENA_ENVELOPE_SECONDS: "300"
-          ARENA_ENVELOPE_CONCURRENCY: "16"
+          # WebSocket dinlemesi matris işinde yapıldı; burada yalnızca artifact'lar
+          # birleştirilir ve `room/info` turları sürer. Yerel dinleyici kapalı ki
+          # aynı odalar için imzalama kotası ikinci kez harcanmasın.
+          ARENA_SHARD_DIR: web/data/shards
+          ARENA_ENVELOPE_ROOMS: "0"
           # Tanımlıysa WebSocket imzalaması anahtarla yapılır (60 odanın tamamı
           # dinlenir). Tanımlı değilse ücretsiz imzalama ~dakikada birkaç odaya
           # izin verir ve dinleyici sınırı görünce durur.
@@ -90,6 +174,12 @@ jobs:
           # tanımlı değilse adım sessizce atlanır.
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Zarf yakalandığı anda Telegram/Discord bildirimi. Adres yalnızca
+          # secret'tan gelir, hiçbir dosyaya yazılmaz; tanımlı değilse bildirim
+          # kapalı kalır ve koşu tek satır neden yazar.
+          ARENA_TELEGRAM_BOT_TOKEN: ${{ secrets.ARENA_TELEGRAM_BOT_TOKEN }}
+          ARENA_TELEGRAM_CHAT_ID: ${{ secrets.ARENA_TELEGRAM_CHAT_ID }}
+          ARENA_DISCORD_WEBHOOK_URL: ${{ secrets.ARENA_DISCORD_WEBHOOK_URL }}
           ARENA_DATA_BRANCH: ${{ env.DATA_BRANCH }}
         run: |
           # Dakika başında aynı saniyeye yüklenmemek için kısa rastgele gecikme.
@@ -108,7 +198,9 @@ jobs:
           cp scripts/data-changed.mjs "$staged/data-changed.mjs"
           git config user.name "arena-radar[bot]"
           git config user.email "arena-radar@users.noreply.github.com"
-          # .gitignore veriyi ana dalda yasaklar; dal değişiminden önce temizle
+          # .gitignore veriyi ana dalda yasaklar; dal değişiminden önce temizle.
+          # Shard artifact'ları veri dalına commit edilmez.
+          rm -rf web/data/shards
           rm -f web/data/*.json
           branch_exists="false"
           if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then

@@ -73,32 +73,135 @@ GitHub Actions (cron */5)
   `connected` (bağlanan oda), `failed`, `seconds` (dinleme süresi), `envelopes`
   (yakalanan zarf), `rateLimited`/`rateLimitHits` (imzalama kotası), `signedWithKey`
   (`EULER_API_KEY` kullanıldı mı), `messageTypes` (çözülen protokol mesajları).
-  `health.wsRooms/wsRequested/wsEnvelopes/wsMessages/wsSignedWithKey/wsRateLimited`
-  `version.json` için aynı sayıların kısa hâlidir; tam kayıt `watch` nesnesidir.
+  Kota beklemesi de görünürdür: `cooldownUntil` (yeniden deneme anı, ISO),
+  `cooldownSeconds` (son bekleme penceresi) ve `cooldownWaits` (turda kaç kez beklendiği).
+  Panel "kota doldu" demek yerine bu andan geri sayar; süre bitince beklemenin
+  tamamlandığını yazar. `health.wsRooms/wsRequested/wsEnvelopes/wsMessages/wsSignedWithKey/wsRateLimited`
+  ve `health.wsCooldownUntil/wsCooldownSeconds/wsCooldownWaits` aynı sayıların kısa
+  hâlidir; tam kayıt `watch` nesnesidir.
+- Dinleyici odaya bağlanır bağlanmaz oda bilgisindeki (`room/info`) açık zarf
+  alanlarını da okur; odaya girmeden önce açılmış sandık/mektup/çanta akışı
+  beklemeden listeye girer. Bu okuma imzalama kotası harcamaz, altı saatten eski
+  zarflar `envelopeReward` doğrulamasıyla reddedilir.
 - `warnings` dizisi insan tarafından okunacak uyarıları taşır; `EULER_API_KEY` yoksa,
   dinleme kapalıysa veya kota dolduysa boş kalmaz. Panel bu satırları uyarı kutusu olarak gösterir;
   uyarı sessizce yutulmaz.
+- Panel `/api/radar/watch` ucu başarılı yanıtı 60 saniye süreç içi önbellekte tutar;
+  eşzamanlı sekmeler aynı isteği paylaşır, her sekme GitHub'a ayrı istek atmaz.
+  Hata yanıtı önbelleğe alınmaz ki toparlanma hemen görünsün.
+- Zarf şeması sürüklenmesi de `warnings` alanına düşer: bilinen tipler
+  (`ENVELOPE_MESSAGE_TYPES`: `WebcastEnvelopeMessage`, `WebcastGoodyBagMessage`) dışında
+  adı zarf ailesine benzeyen yeni bir tip görülürse **örnek mesaj tipi ve sayısıyla**
+  uyarı üretilir. 24 saat boyunca hiç zarf/çanta tipi gelmezse de uyarı verilir; son
+  görülen örnek tip `health.envelopeSampleType` alanında taşınır.
+- `health.envelopeLastSeenAt`, `health.envelopeTrackingSince` ve
+  `health.unknownEnvelopeTypes` şema takibinin yayınlar arası kaydıdır; ilk çalıştırma
+  `envelopeTrackingSince` tabanını kurar.
 
 ## Veri sözleşmesi
 
 `scripts/radar-contract.mjs` yayınlanan iki dosyanın zorunlu alanlarını tanımlar
 (`schema`, `generatedAt`, `streams[].username/roomId`, `chests[].envelopeId/coins/opensAt`,
 `roster.total/days/streamers`). Üretici (`radar-publish.mjs`) yayın öncesi doğrular;
-`tests/radar-contract.test.mjs` sözleşmeyi CI'da kilitler. `schema` alanı büyütülürse
-web kütüphanesi ve Windows istemcisi aynı anda güncellenmelidir.
+`tests/radar-contract.test.mjs` sözleşmeyi CI'da kilitler. `watch` varsa
+`cooldownUntil` (ISO ya da null), `cooldownSeconds` ve `cooldownWaits` zorunludur;
+panellerin kota geri sayımı bu alanlara dayanır, alan sessizce kaybolamaz.
+`schema` alanı büyütülürse web kütüphanesi ve Windows istemcisi aynı anda güncellenmelidir.
 Tek dosya kontrolü: `node scripts/radar-contract.mjs web/data/arena-live.json`
 
 ## Yayın kapısı
 
 Her tarama zaman damgalarını tazelediği için dosya hep farklı görünür. `scripts/data-changed.mjs`
-canlı oda kümesi, sandık kümesi ve üye defteri toplamını karşılaştırır; yalnızca bunlar
-değiştiğinde (ya da yayındaki veri 20 dakikayı geçtiğinde) commit ve Pages deploy'u yapılır.
+canlı oda kümesi, sandık kümesi, üye defteri toplamı ve zarf şeması imzasını
+(şema sürüklenmesi/24 saat sessizlik uyarıları + `health.unknownEnvelopeTypes`)
+karşılaştırır; bunlardan biri değiştiğinde (ya da yayındaki veri 20 dakikayı geçtiğinde)
+commit ve Pages deploy'u yapılır. Kota sayaçları gibi her turda değişen uyarı satırları
+imzaya girmez. Böylece şema sürüklenmesi uyarısı, oda/sandık listesi değişmese bile panele ulaşır.
 Gerekçe stderr'e yazılır, karar stdout'ta `true`/`false` olarak döner.
 
 ## Sağlık ve uyarı
 
 - Radar işi düşerse `alert` işi `radar-alert` etiketli bir issue açar; ilk başarılı koşu kapatır.
 - `health.json` yerine `version.json → health` kullanılır; böylece veri dalındaki dosya sayısı artmaz.
+
+### Zarf bildirimi (Telegram/Discord)
+
+Zarf yakalandığı anda `scripts/radar-notify.mjs` webhook gönderir; panel senkronu veya
+Pages yayını beklenmez. Adres yalnızca Actions secret'ından okunur, dosyaya yazılmaz.
+
+| Secret | Açıklama |
+| --- | --- |
+| `ARENA_TELEGRAM_BOT_TOKEN` + `ARENA_TELEGRAM_CHAT_ID` | Telegram bot bildirimi (ikisi birlikte gerekir) |
+| `ARENA_DISCORD_WEBHOOK_URL` | Discord kanal webhook'u (Telegram tanımlıysa kullanılmaz) |
+
+Spam koruması: aynı `envelopeId` bir kez bildirilir (önceki yayındaki sandıklar ve koşu içi
+kayıtlar), koşu başına en fazla 4 mesaj gider, mesajlar arasında 1,5 sn beklenir, açılışı
+geçmiş zarf gönderilmez. Kanal tanımlı değilse koşu log'una tek satır "bildirim kapalı" yazılır.
+Bildirim hatası taramayı düşürmez; hata metni token/adres içerseydi maskelenir.
+
+```bash
+# Yerel deneme: adresi komut geçmişine yazmadan oku, sonra taramayı çalıştır.
+read -rs ARENA_DISCORD_WEBHOOK_URL && export ARENA_DISCORD_WEBHOOK_URL
+node scripts/radar-publish.mjs
+```
+
+## Zarf replay testi
+
+`tests/fixtures/webcast-envelope-message.json` gerçek bir TikTok `WebcastEnvelopeMessage`
+kaydından alınıp maskelenmiş karedir (kaynak ve maskeleme listesi dosyanın `source`
+alanında). `tests/envelope-replay.test.mjs` bu kareyi kotasız/çevrimdışı olarak
+`envelopeReward → applyChestReward` zincirinden geçirir ve aynı koşuda sandık kaydının
+(jeton, kişi, oran, açılış, `kind: chest`) oluştuğunu doğrular.
+
+- Kimlikler (`msgId`, `roomId`, `envelopeId`, `sendUserId`, `sendUserName`, avatar)
+  taklit değerlerdir; `diamondCount`, `peopleCount`, `skinId`, `businessType` ve
+  zaman damgaları gerçektir.
+- Kare gerçek zaman damgasını korur; test yalnızca `unpackAt` alanını çalıştığı ana
+  taşır, çünkü parser altı saatten eski zarfı (doğru şekilde) reddeder.
+- Yeni kare kaydetmek için canlı dinleyici `--capture` ile çalıştırılır; ilk gerçek
+  `WebcastEnvelopeMessage` maskelenip hedef fixture'a yazılır, sonraki kareler yok sayılır:
+
+  ```bash
+  node scripts/envelope-watch.mjs --from web/data/arena-live.json --rooms 12 \
+    --seconds 120 --capture tests/fixtures/webcast-envelope-message.json
+  ```
+
+  `scripts/envelope-capture.mjs` kimlikleri, kullanıcı adlarını, avatarları ve URL'leri
+  maskeler; `diamondCount`, `peopleCount`, `skinId`, `businessType` ve zaman damgalarına
+  dokunmaz. Zarf gelmezse dosya değişmez ve komut bunu log'da söyler. Replay testi
+  değerleri fixture'dan okuduğu için yeni kareyle güncellenmesi gerekmez.
+
+## Matris zarf dinlemesi
+
+WebSocket zarf dinlemesi tek runner'ın ücretsiz imzalama kotasına sığmadığı için
+iş GitHub Actions matrisine bölünür:
+
+```
+radar.yml
+  ├─ shard (matrix: 0..3, paralel)   her runner kendi IP'si + kendi kotası
+  │     önceki arena-live.json'dan kendine düşen 30 odayı dinler
+  │     5'erli turlar, oda başına 30 sn (--hold) · sonuç: envelope-shard-<n>.json
+  └─ scan (needs: shard)             artifact'ları birleştirir
+        ARENA_SHARD_DIR=web/data/shards · yerel WS dinleyici kapalı
+        arena-live.json + roster.json + version.json yazar, yayınlar
+```
+
+- Oda listesi önceki yayından alınır; shard'lar birbirini beklemez. Oda seçimi
+  `scripts/envelope-shards.mjs → shardRooms` (izleyiciye göre ilk `30 × 4 = 120` oda,
+  sırayla bölünür; aynı oda iki runner'da kota harcamaz).
+- Bağlantı anında oda bilgisindeki zarflar okunur; oda başına kalma süresi
+  `--hold 30` ile sınırlıdır. Sandığı zaten odada duran oda için uzun beklemek
+  gerekmez; bağlantı kısa tutulduğu için aynı pencerede daha çok oda dolaşılır.
+- Her shard odaları 5'erli turlara bölüp kendi süresini dinler; `--hold` süresi
+  dolunca bağlantı kapanır ve sıradaki tura geçilir, böylece 30 oda 5 dakikada
+  dolaşılır. Kota reddi gelirse dinleyici odaları bekletip yeniden dener.
+- Shard `arena-live.json` yazmaz, git'e dokunmaz. Birleştirme (`mergeShardWatches`)
+  sayaçları toplar, zarfları kimliğe göre tekilleştirir; `signedWithKey` ancak tüm
+  shard'lar anahtarlıysa true olur.
+- Artifact yoksa yayın durmaz; `warnings` alanına "matris dinleme artifact'ı
+  bulunamadı" satırı düşer.
+- Ayarlar: `shard --rooms 30 --batch 5 --seconds 300 --hold 30 --shards 4`
+  (iş dosyasında), yerel deneme için `ARENA_SHARD_*` ortam değişkenleri.
 
 ## Veri dalı bakımı ve yedek
 

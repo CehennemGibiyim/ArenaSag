@@ -52,6 +52,16 @@ test("üye defteri büyümesi yayın tetikler", () => {
   assert.equal(result.reason, "uye-defteri-buyudu");
 });
 
+test("zarf şeması uyarısı yayın tetikler", () => {
+  const next = arena({
+    warnings: ["Zarf şeması sürüklenmesi: bilinmeyen zarf/çanta mesaj tipi WebcastEnvelopeMessageV2 (4)."],
+    health: { unknownEnvelopeTypes: ["WebcastEnvelopeMessageV2"] },
+  });
+  const result = decideChange({ prevArena: arena(), nextArena: next, prevRoster: roster(5), nextRoster: roster(5), now });
+  assert.equal(result.changed, true);
+  assert.equal(result.reason, "uyari-degisti");
+});
+
 test("bayat veri değişiklik olmasa da tazelenir", () => {
   const result = decideChange({
     prevArena: arena({ generatedAt: new Date(now - MAX_AGE_MS - 1).toISOString() }),

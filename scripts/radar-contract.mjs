@@ -45,6 +45,19 @@ export function validateSnapshot(data) {
       if (typeof watch.rateLimited !== "boolean") push(problems, "watch.rateLimited boolean olmalı");
       if (typeof watch.signedWithKey !== "boolean") push(problems, "watch.signedWithKey boolean olmalı");
       if (!isObj(watch.messageTypes)) push(problems, "watch.messageTypes nesne olmalı");
+      // Kota beklemesi alanları zorunlu: panel "kota doldu" yerine yeniden
+      // deneme anını geri sayar, alan sessizce kaybolursa bu davranış bozulur.
+      if (
+        watch.cooldownUntil !== null &&
+        (!isStr(watch.cooldownUntil) || !Number.isFinite(Date.parse(watch.cooldownUntil)))
+      ) {
+        push(problems, "watch.cooldownUntil ISO zaman ya da null olmalı");
+      }
+      for (const key of ["cooldownSeconds", "cooldownWaits"]) {
+        if (!isNum(Number(watch[key])) || Number(watch[key]) < 0) {
+          push(problems, `watch.${key} negatif olmayan sayı olmalı`);
+        }
+      }
     }
   }
 

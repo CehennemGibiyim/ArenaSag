@@ -9,6 +9,7 @@
  *   - Yeni/kalkan canlı oda (roomId + username kümesi)         → değişti
  *   - Yeni/kalkan sandık ya da sandığın jeton/kontenjan/açılışı → değişti
  *   - Üye defteri toplamı arttı/azaldı                          → değişti
+ *   - Zarf şeması uyarısı veya bilinmeyen zarf tipi değişti     → değişti (şema raporu)
  *   - Yayındaki veri MAX_AGE_MS'den eski                       → değişti (tazelik)
  *
  * Yalnızca izleyici sayısı, sıralama, başlık veya zaman damgası değiştiyse
@@ -67,6 +68,22 @@ export function sameSet(left, right) {
   return true;
 }
 
+/**
+ * Yayınlanacak zarf şeması imzası. Şema sürüklenmesi ve 24 saat sessizlik
+ * uyarıları yalnızca `warnings`/`health` alanlarında görünür; oda ve sandık
+ * kümeleri değişmese de panel bu raporu almalı. Kota sayaçları gibi her turda
+ * değişen satırlar imzaya girmez, yoksa yayın kapısı her koşuda açılırdı.
+ */
+export function warningSignature(snapshot) {
+  const data = obj(snapshot);
+  const health = obj(data.health);
+  const schemaWarnings = list(data.warnings)
+    .map((line) => str(line))
+    .filter((line) => line.startsWith("Zarf şeması sürüklenmesi:") || line.startsWith("24 saattir "));
+  const unknownTypes = list(health.unknownEnvelopeTypes).map((type) => str(type));
+  return [...schemaWarnings, ...unknownTypes].join("\n");
+}
+
 export function rosterTotal(payload) {
   const data = obj(payload);
   const total = Number(data.total);
@@ -86,6 +103,9 @@ export function decideChange({ prevArena, nextArena, prevRoster, nextRoster, now
   if (!sameSet(roomKeys(prevArena), roomKeys(nextArena))) return { changed: true, reason: "oda-degisti" };
   if (!sameSet(chestKeys(prevArena), chestKeys(nextArena))) return { changed: true, reason: "sandik-degisti" };
   if (rosterTotal(prevRoster) !== rosterTotal(nextRoster)) return { changed: true, reason: "uye-defteri-buyudu" };
+  if (warningSignature(prevArena) !== warningSignature(nextArena)) {
+    return { changed: true, reason: "uyari-degisti" };
+  }
   return { changed: false, reason: "anlamli-degisiklik-yok" };
 }
 

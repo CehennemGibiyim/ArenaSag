@@ -7,7 +7,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test tests/alert-rules.test.mjs tests/data-changed.test.mjs tests/radar-contract.test.mjs tests/envelope-watch.test.mjs && tsx --test tests/roster-page.test.ts",
+    "test:unit": "node --test tests/alert-rules.test.mjs tests/data-changed.test.mjs tests/radar-contract.test.mjs tests/envelope-watch.test.mjs tests/envelope-capture.test.mjs tests/envelope-shards.test.mjs tests/envelope-replay.test.mjs tests/radar-notify.test.mjs && tsx --test tests/roster-page.test.ts tests/radar-watch.test.ts",
     "test:postgres": "tsx --test tests/scheduler-postgres.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"

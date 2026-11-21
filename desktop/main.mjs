@@ -296,6 +296,14 @@ function mergeSnapshots(remote, local) {
     source: base === local ? "local-discovery" : base.source,
     streams: [...streams.values()],
     chests: chestList,
+    // WS zarf durumu GitHub taramasının ürünüdür; yerel keşif onu ezmesin ki
+    // masaüstü paneli web panelle aynı sayıları göstersin.
+    watch: (remote && remote.watch) || (local && local.watch) || null,
+    warnings: Array.isArray(remote && remote.warnings)
+      ? remote.warnings
+      : Array.isArray(local && local.warnings)
+        ? local.warnings
+        : [],
     stats: {
       ...(base.stats || {}),
       candidates: Math.max(Number(remote?.stats?.candidates) || 0, Number(local?.stats?.candidates) || 0),
