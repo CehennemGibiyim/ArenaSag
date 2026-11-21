@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "dataVersion": "2026-11-21T05:57:39.970Z",
-  "generatedAt": "2026-11-21T05:57:39.970Z",
-  "commit": "6c649ed420a8e6cffe460ac608e48d7cc96d4793",
+  "dataVersion": "2026-11-21T06:15:35.817Z",
+  "generatedAt": "2026-11-21T06:15:35.817Z",
+  "commit": "7bdd9b6dfab3f9af981ce97b9e1b285e92206c99",
   "stats": {
-    "candidates": 71,
-    "checked": 61,
-    "live": 21,
+    "candidates": 77,
+    "checked": 71,
+    "live": 29,
     "chests": 0,
-    "newMembers": 9,
-    "roster": 21,
-    "errors": 3
+    "newMembers": 8,
+    "roster": 29,
+    "errors": 4
   },
   "roster": {
-    "total": 21,
-    "today": 9
+    "total": 29,
+    "today": 8
   }
 }
