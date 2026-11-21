@@ -443,6 +443,7 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
           </span>
           <span className="text-[9px] text-white/30">{chests.length} sandık</span>
         </div>
+        <RadarWatchStrip compact />
         {chests.slice(0, 12).map((chest) => {
           const left = Math.max(0, Math.round((new Date(chest.opensAt ?? now).getTime() - now) / 1000));
           return (
