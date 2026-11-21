@@ -75,14 +75,14 @@ export function RadarConsole() {
   }, []);
 
   useEffect(() => {
-    void load();
-    void loadScanStatus();
+    // İlk tur da zamanlayıcıdan başlar; efekt gövdesinde senkron durum yazımı olmaz.
+    const first = setTimeout(() => { void load(); void loadScanStatus(); }, 0);
     fetch("/api/live/status")
       .then((response) => response.json())
       .then((data) => setConnector(data.connector))
       .catch(() => null);
     const timer = setInterval(() => void loadScanStatus(), 10000);
-    return () => clearInterval(timer);
+    return () => { clearTimeout(first); clearInterval(timer); };
   }, [load, loadScanStatus]);
 
   const filtered = useMemo(() => {

@@ -54,11 +54,13 @@ export function SettingsForm() {
   };
 
   useEffect(() => {
-    void load();
+    // İlk yükleme zamanlayıcıdan başlar; efekt gövdesinde senkron durum yazımı olmaz.
+    const first = setTimeout(() => { void load(); }, 0);
     fetch("/api/live/status")
       .then((response) => response.json())
       .then((data) => setStatus(data.connector))
       .catch(() => null);
+    return () => clearTimeout(first);
   }, []);
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {

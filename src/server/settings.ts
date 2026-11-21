@@ -54,7 +54,7 @@ export const DEFAULT_SETTINGS: ArenaSettings = {
   maxScanRooms: 12,
   listenSeconds: 30,
   chestAlertMinRatio: 2,
-  scanConcurrency: 5,
+  scanConcurrency: 12,
   listenToAll: true,
   scanAllCountries: true,
   chestAlertMinCoins: 100000,

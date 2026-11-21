@@ -2,13 +2,18 @@ name: Arena Radar Scan
 
 on:
   schedule:
-    # GitHub en kısa 5 dakikalık aralığı destekler; yoğunlukta birkaç dakika gecikebilir.
-    - cron: "*/5 * * * *"
+    # 10 dakikalık kadans: koşu sayısını yarıya indirir. Yayın ayrıca
+    # scripts/data-changed.mjs kararına bağlıdır (anlamlı değişiklik yoksa atlanır).
+    - cron: "*/10 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "scripts/radar-publish.mjs"
+      - "scripts/envelope-watch.mjs"
+      - "scripts/radar-contract.mjs"
+      - "scripts/supabase-mirror.mjs"
+      - "scripts/data-changed.mjs"
       - ".github/workflows/radar.yml"
 
 permissions:
@@ -16,6 +21,7 @@ permissions:
   pages: write
   id-token: write
   actions: read
+  issues: write
 
 concurrency:
   group: arena-radar
@@ -27,6 +33,7 @@ env:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       changed: ${{ steps.publish.outputs.changed }}
     steps:
@@ -37,6 +44,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      # WebSocket zarf dinleyicisi için gerekli iki paket; tam `npm ci` gerekmez.
+      - name: WebSocket istemcisini kur
+        run: >
+          npm install --no-save --package-lock=false --no-audit --no-fund
+          tiktok-live-connector@2.5.0 tiktok-live-api-sdk@0.4.0-beta1
 
       - name: Veri dalını hazırla
         run: |
@@ -54,8 +67,29 @@ jobs:
 
       - name: Canlı yayın ve sandık taraması
         env:
-          ARENA_MAX_CHECKS: "80"
-          ARENA_MAX_ROOMS: "45"
+          # Sandık, tek turda 45 oda görülerek yakalanamaz: 1000 aday doğrulanır,
+          # her turda 420 canlı oda taranır ve bu tur 6 kez tekrarlanır.
+          ARENA_MAX_CHECKS: "1000"
+          ARENA_MAX_ROOMS: "420"
+          ARENA_MAX_STREAMS: "300"
+          ARENA_CHEST_ROUNDS: "6"
+          ARENA_CHEST_ROUND_GAP: "30"
+          ARENA_BUDGET_SECONDS: "780"
+          ARENA_VERIFY_CONCURRENCY: "10"
+          ARENA_ROOM_CONCURRENCY: "12"
+          # Zarf yalnızca canlı akışta görünür: en yoğun 60 oda 5 dakika boyunca
+          # WebSocket'ten dinlenir, yakalanan sandık/mektup aynı listeye yazılır.
+          ARENA_ENVELOPE_ROOMS: "60"
+          ARENA_ENVELOPE_SECONDS: "300"
+          ARENA_ENVELOPE_CONCURRENCY: "16"
+          # Tanımlıysa WebSocket imzalaması anahtarla yapılır (60 odanın tamamı
+          # dinlenir). Tanımlı değilse ücretsiz imzalama ~dakikada birkaç odaya
+          # izin verir ve dinleyici sınırı görünce durur.
+          EULER_API_KEY: ${{ secrets.EULER_API_KEY }}
+          # Tanımlıysa üye defteri ve sandık geçmişi Supabase'e de yazılır;
+          # tanımlı değilse adım sessizce atlanır.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ARENA_DATA_BRANCH: ${{ env.DATA_BRANCH }}
         run: |
           # Dakika başında aynı saniyeye yüklenmemek için kısa rastgele gecikme.
@@ -70,11 +104,15 @@ jobs:
           for name in arena-live.json roster.json version.json; do
             if [ -f "web/data/$name" ]; then cp "web/data/$name" "$staged/$name"; fi
           done
+          # Dal değişiminde scripts/ kaybolur; karar betiğini önceden geçici klasöre al.
+          cp scripts/data-changed.mjs "$staged/data-changed.mjs"
           git config user.name "arena-radar[bot]"
           git config user.email "arena-radar@users.noreply.github.com"
           # .gitignore veriyi ana dalda yasaklar; dal değişiminden önce temizle
           rm -f web/data/*.json
+          branch_exists="false"
           if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            branch_exists="true"
             git fetch --depth=1 origin "$DATA_BRANCH"
             git checkout -B "$DATA_BRANCH" FETCH_HEAD
           else
@@ -82,24 +120,48 @@ jobs:
             git rm -r --cached . >/dev/null 2>&1 || true
           fi
           mkdir -p web/data
+          changed="true"
+          if [ "$branch_exists" = "true" ] && [ -f web/data/arena-live.json ]; then
+            changed="$(node "$staged/data-changed.mjs" --prev web/data --next "$staged")"
+          fi
+          if [ "$changed" != "true" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Anlamlı değişiklik yok; commit ve yayın atlandı."
+            exit 0
+          fi
           for name in arena-live.json roster.json version.json; do
             if [ -f "$staged/$name" ]; then cp "$staged/$name" "web/data/$name"; fi
           done
           # -f: veri dalında .gitignore geçerli olsa da dosyalar izlenmeli
           git add -f web/data
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Veri değişmedi."
-          else
-            git commit -m "chore(radar): canlı tarama verisi $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git push origin "$DATA_BRANCH"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          git commit -m "chore(radar): canlı tarama verisi $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push origin "$DATA_BRANCH"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Tarama verisini deploy işine aktar
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-data
+          path: web/data/*.json
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Önceki uyarı kaydını kapat
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          number="$(gh issue list --label radar-alert --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue close "$number" --comment "Radar yeniden başarılı çalıştı: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
 
   deploy:
     needs: scan
     if: needs.scan.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     concurrency:
       group: arena-pages
       cancel-in-progress: false
@@ -110,16 +172,11 @@ jobs:
       - name: Depoyu al
         uses: actions/checkout@v4
 
-      - name: Veriyi yayına ekle
-        run: |
-          set -euo pipefail
-          mkdir -p web/data
-          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
-            git fetch --depth=1 origin "$DATA_BRANCH"
-            for name in arena-live.json roster.json version.json; do
-              git show "FETCH_HEAD:web/data/$name" > "web/data/$name" 2>/dev/null || rm -f "web/data/$name"
-            done
-          fi
+      - name: Tarama verisini indir
+        uses: actions/download-artifact@v4
+        with:
+          name: radar-data
+          path: web/data
 
       - name: Pages'i hazırla
         uses: actions/configure-pages@v5
@@ -152,3 +209,27 @@ jobs:
       - name: GitHub Pages'e yayınla
         id: deployment
         uses: actions/deploy-pages@v5
+
+  alert:
+    needs: [scan, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Uyarı kaydı aç veya güncelle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label create radar-alert --color B60205 --description "Radar koşusu uyarıları" >/dev/null 2>&1 || true
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="Radar koşusu başarısız oldu (${GITHUB_EVENT_NAME}). Ayrıntı: ${run_url}"
+          number="$(gh issue list --label radar-alert --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "Radar koşusu başarısız" --body "$body" --label radar-alert
+          fi

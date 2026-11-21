@@ -28,6 +28,26 @@ import {
 import { Badge, Card, CardHeader, Progress, Sparkline } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
 
+// Uyarı sesi bileşen dışında kurulur: render sırasında ref yazımı olmaz ve
+// bileşen yeniden kurulsa da tek bir AudioContext kullanılır.
+let audioContext: AudioContext | null = null;
+function beep() {
+  try {
+    if (!audioContext) audioContext = new AudioContext();
+    const ctx = audioContext;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 1180;
+    gain.gain.value = 0.045;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  } catch {
+    /* ses kapalı */
+  }
+}
+
 type ChestRow = {
   id: number;
   envelopeId: string;
@@ -290,10 +310,9 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
   const [qrChest, setQrChest] = useState<ChestRow | null>(null);
   const [detail, setDetail] = useState<ChestRow | null>(null);
   const [copied, setCopied] = useState("");
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number>(() => Date.now());
   const frozenRef = useRef<ChestRow[] | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
-  const audioRef = useRef<AudioContext | null>(null);
   const dict = LABELS[lang] as Dict;
 
   const load = useCallback(async () => {
@@ -377,24 +396,6 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
     if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
   }, [notify]);
 
-  const beep = () => {
-    try {
-      if (!audioRef.current) audioRef.current = new AudioContext();
-      const ctx = audioRef.current;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = 1180;
-      gain.gain.value = 0.045;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.1);
-    } catch {
-      /* ses kapalı */
-    }
-  };
-
-
   const copy = async (value: string, key: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -442,7 +443,7 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
           <span className="text-[9px] text-white/30">{chests.length} sandık</span>
         </div>
         {chests.slice(0, 12).map((chest) => {
-          const left = Math.max(0, Math.round((new Date(chest.opensAt ?? Date.now()).getTime() - now) / 1000));
+          const left = Math.max(0, Math.round((new Date(chest.opensAt ?? now).getTime() - now) / 1000));
           return (
             <div key={chest.id} className="rounded-lg border border-white/[0.09] bg-white/[0.03] p-2">
               <div className="flex items-center justify-between gap-2">
@@ -683,7 +684,7 @@ export function ChestRadar({ initialQuery = "", mini = false }: { initialQuery?:
           {rows.map((row) => {
             const isFlow = row.kind === "live";
             const opensAt = isFlow ? null : (row as ChestRow).opensAt;
-            const left = isFlow ? 0 : Math.max(0, Math.round((new Date(opensAt ?? Date.now()).getTime() - now) / 1000));
+            const left = isFlow ? 0 : Math.max(0, Math.round((new Date(opensAt ?? now).getTime() - now) / 1000));
             const isOpen = !isFlow && left <= 0;
             const isClaimed = !isFlow && (row as ChestRow).status === "claimed";
             const webUrl = `https://www.tiktok.com/@${row.username}/live`;

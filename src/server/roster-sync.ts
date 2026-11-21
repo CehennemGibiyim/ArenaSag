@@ -1,41 +1,40 @@
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { liveRooms } from "@/db/schema";
-import { upsertLiveRoom } from "@/server/rooms";
+import { liveRooms, settings } from "@/db/schema";
+import {
+  LIVE_WINDOW_MS,
+  orderRoster,
+  pageRoster,
+  rosterHandle,
+  type RosterMember,
+} from "@/lib/roster-page";
 
 /**
  * Üye defteri (roster) — GitHub Radar'ın veri dalında günlük olarak büyüyen
  * doğrulanmış yayıncı listesini PostgreSQL'e aktarır.
  *
+ * Defter `lastSeen`'e göre azalan sıralı yayınlandığı için sabit bir "ilk N
+ * kayıt" dilimi eskiden eski üyeleri kalıcı olarak dışarıda bırakıyordu. Artık
+ * defter `firstSeen` artan sırayla sayfalanır ve imleç `settings` içinde tutulur;
+ * her tur bir sonraki 400 kişi tek bir toplu ekleme ile aktarılır.
+ *
  * Yalnızca panelde henüz olmayan yayıncılar eklenir; mevcut satırların izleyici,
- * elmas ve sandık verileri ezilmez. Böylece her gün yeni yayıncı birikir.
+ * elmas ve sandık verileri ezilmez.
  */
 
 const REPO = process.env.ARENA_GITHUB_REPO || "CehennemGibiyim/ArenaSag";
 const DATA_BRANCH = process.env.ARENA_DATA_BRANCH || "data";
 const SOURCE = "github-roster";
-const LIVE_WINDOW_MS = 30 * 60_000;
-const SYNC_LIMIT = 2000;
-const NEW_PER_RUN = 400;
+const CURSOR_KEY = "rosterSyncCursor";
+const PAGE_SIZE = 400;
 const INTERVAL_MS = 30 * 60_000;
-
-type RosterEntry = {
-  username?: string;
-  nickname?: string;
-  avatar?: string;
-  region?: string;
-  roomId?: string;
-  firstSeen?: string;
-  lastSeen?: string;
-  lastLiveAt?: string;
-  liveCount?: number;
-};
 
 type RosterPayload = {
   schema?: number;
   total?: number;
   today?: { date?: string; added?: number };
   days?: Array<{ date?: string; added?: number; total?: number }>;
-  streamers?: RosterEntry[];
+  streamers?: RosterMember[];
 };
 
 export type RosterSyncResult = {
@@ -45,6 +44,9 @@ export type RosterSyncResult = {
   skipped: number;
   live: number;
   total: number;
+  cursor: number;
+  wrapped: boolean;
+  unchanged?: boolean;
   today?: { date?: string; added?: number };
   days?: Array<{ date?: string; added?: number; total?: number }>;
   syncedAt: string;
@@ -54,6 +56,7 @@ export type RosterSyncResult = {
 const state = globalThis as typeof globalThis & {
   __arenaRosterTimer?: ReturnType<typeof setInterval>;
   __arenaRosterLast?: RosterSyncResult | null;
+  __arenaRosterEtag?: string;
 };
 
 export function rosterUrl() {
@@ -64,71 +67,108 @@ export function lastRosterSync(): RosterSyncResult | null {
   return state.__arenaRosterLast ?? null;
 }
 
+/** İmleci `settings.data` içinde tutar; şeması değişmeyen tek satırlık kayıt. */
+async function readCursor(): Promise<number> {
+  try {
+    const [row] = await db.select({ data: settings.data }).from(settings).where(eq(settings.id, 1)).limit(1);
+    const value = Number((row?.data as Record<string, unknown> | undefined)?.[CURSOR_KEY]);
+    return Number.isInteger(value) && value >= 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function saveCursor(cursor: number): Promise<void> {
+  const updated = await db
+    .update(settings)
+    .set({
+      data: sql`jsonb_set(coalesce(${settings.data}, '{}'::jsonb), '{rosterSyncCursor}', to_jsonb(${cursor}::int))`,
+      updatedAt: new Date(),
+    })
+    .where(eq(settings.id, 1))
+    .returning({ id: settings.id });
+  if (updated.length) return;
+  await db
+    .insert(settings)
+    .values({ id: 1, data: { [CURSOR_KEY]: cursor } })
+    .onConflictDoNothing();
+}
+
 export async function syncRoster(url = rosterUrl()): Promise<RosterSyncResult> {
   const syncedAt = new Date().toISOString();
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "User-Agent": "ArenaPanel/roster-sync",
+    };
+    // Dosya değişmediyse ham gövdeyi indirmeden 304 al.
+    if (state.__arenaRosterEtag) headers["If-None-Match"] = state.__arenaRosterEtag;
     const response = await fetch(url, {
       cache: "no-store",
-      headers: { Accept: "application/json", "User-Agent": "ArenaPanel/roster-sync" },
+      headers,
       signal: AbortSignal.timeout(15_000),
     });
+    if (response.status === 304 && state.__arenaRosterLast) {
+      return { ...state.__arenaRosterLast, unchanged: true, syncedAt };
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    state.__arenaRosterEtag = response.headers.get("etag") ?? "";
     const payload = (await response.json()) as RosterPayload;
     if (payload.schema !== 1 || !Array.isArray(payload.streamers)) {
       throw new Error("Üye defteri biçimi tanınmadı");
     }
 
-    const entries = payload.streamers.slice(0, SYNC_LIMIT);
-    const existing = new Set(
-      (await db.select({ username: liveRooms.username }).from(liveRooms)).map((row) => row.username),
-    );
+    const members = orderRoster(payload.streamers);
+    const cursor = await readCursor();
+    const page = pageRoster(members, cursor, PAGE_SIZE);
+    const now = Date.now();
+    const rows = page.items
+      .map((entry) => {
+        const username = rosterHandle(entry.username);
+        if (!username) return null;
+        const lastLiveAt = Date.parse(String(entry.lastLiveAt ?? ""));
+        const isLive = Number.isFinite(lastLiveAt) && now - lastLiveAt < LIVE_WINDOW_MS;
+        return {
+          username,
+          roomId: String(entry.roomId ?? ""),
+          nickname: String(entry.nickname ?? "") || username,
+          avatar: String(entry.avatar ?? ""),
+          region: String(entry.region ?? ""),
+          regionBasis: entry.region ? ("room" as const) : ("unknown" as const),
+          viewers: 0,
+          liveNow: isLive,
+          verified: isLive,
+          monitoring: false,
+          source: SOURCE,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
 
-    let added = 0;
-    let skipped = 0;
-    let live = 0;
-    for (const entry of entries) {
-      const username = String(entry.username ?? "").replace(/^@+/, "").trim().toLowerCase();
-      if (!username) continue;
-      const lastLiveAt = Date.parse(entry.lastLiveAt ?? "");
-      const isLive = Number.isFinite(lastLiveAt) && Date.now() - lastLiveAt < LIVE_WINDOW_MS;
-      if (isLive) live += 1;
-      if (existing.has(username) || added >= NEW_PER_RUN) {
-        skipped += 1;
-        continue;
-      }
-      const row = await upsertLiveRoom({
-        username,
-        roomId: entry.roomId ?? "",
-        nickname: entry.nickname ?? username,
-        avatar: entry.avatar ?? "",
-        region: entry.region ?? "",
-        regionBasis: entry.region ? "room" : "unknown",
-        viewers: 0,
-        liveNow: isLive,
-        verified: isLive,
-        monitoring: false,
-        source: SOURCE,
-      });
-      if (!row) {
-        skipped += 1;
-        continue;
-      }
-      existing.add(username);
-      added += 1;
-    }
+    // Tek toplu ekleme: 400 ayrı gidiş-dönüş yerine bir sorgu.
+    const inserted = rows.length
+      ? await db
+          .insert(liveRooms)
+          .values(rows)
+          .onConflictDoNothing({ target: liveRooms.username })
+          .returning({ username: liveRooms.username })
+      : [];
+    await saveCursor(page.nextCursor);
 
-    state.__arenaRosterLast = {
+    const result: RosterSyncResult = {
       ok: true,
-      fetched: entries.length,
-      added,
-      skipped,
-      live,
-      total: Number(payload.total ?? payload.streamers.length),
+      fetched: rows.length,
+      added: inserted.length,
+      skipped: rows.length - inserted.length,
+      live: rows.filter((row) => row.liveNow).length,
+      total: page.total,
+      cursor: page.nextCursor,
+      wrapped: page.wrapped,
       today: payload.today,
       days: Array.isArray(payload.days) ? payload.days.slice(0, 14) : [],
       syncedAt,
     };
-    return state.__arenaRosterLast;
+    state.__arenaRosterLast = result;
+    return result;
   } catch (error) {
     state.__arenaRosterLast = {
       ok: false,
@@ -137,6 +177,8 @@ export async function syncRoster(url = rosterUrl()): Promise<RosterSyncResult> {
       skipped: 0,
       live: 0,
       total: 0,
+      cursor: 0,
+      wrapped: false,
       syncedAt,
       error: (error as Error).message,
     };

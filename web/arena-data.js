@@ -29,6 +29,7 @@
     { id: "hanging", label: "Askıda", filter: { kind: "chest", variants: ["hanging"] } },
     { id: "large", label: "≥ 500 jeton", filter: { kind: "chest", minCoins: 500 } },
     { id: "bag", label: "Çantalar", filter: { kind: "bag" } },
+    { id: "letter", label: "Mektup", filter: { kind: "letter" } },
     { id: "all", label: "Tümü", filter: {} },
     { id: "streams", label: "Canlı yayınlar", filter: { kind: "stream" } },
   ];

@@ -144,9 +144,11 @@ export function LiveRooms() {
   }, [sort, desc, onlyLive, onlyPinned]);
 
   useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), 12000);
-    return () => clearInterval(timer);
+    // İlk tur da zamanlayıcıdan başlar; efekt gövdesinde senkron durum yazımı olmaz.
+    const run = () => { void load(); };
+    const first = setTimeout(run, 0);
+    const timer = setInterval(run, 12000);
+    return () => { clearTimeout(first); clearInterval(timer); };
   }, [load]);
 
   useEffect(() => {

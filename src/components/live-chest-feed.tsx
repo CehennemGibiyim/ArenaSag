@@ -47,10 +47,12 @@ export function LiveChestFeed() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const data = setInterval(() => void load(), 8_000);
+    // İlk tur da zamanlayıcıdan başlar; efekt gövdesinde senkron durum yazımı olmaz.
+    const run = () => { void load(); };
+    const first = setTimeout(run, 0);
+    const data = setInterval(run, 8_000);
     const tick = setInterval(() => setNow(Date.now()), 1_000);
-    return () => { clearInterval(data); clearInterval(tick); };
+    return () => { clearTimeout(first); clearInterval(data); clearInterval(tick); };
   }, [load]);
 
   // Süresi dolan sandık listede kalmaz.

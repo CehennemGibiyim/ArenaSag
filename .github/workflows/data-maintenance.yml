@@ -1,0 +1,67 @@
+name: Data Branch Maintenance
+
+# Radar her yayında tam bir anlık görüntü commit ettiği için `data` dalı sürekli
+# büyür. Bu iş ayda bir dalı tek commit'e indirir; dosyaların içeriği aynı kalır,
+# yalnızca geçmiş sıkıştırılır. Raw/GitHub Pages adresleri HEAD'i okuduğu için
+# yayındaki veri değişmez.
+on:
+  schedule:
+    - cron: "0 4 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arena-data-maintenance
+  cancel-in-progress: false
+
+env:
+  DATA_BRANCH: data
+
+jobs:
+  squash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Veri dalını tek commit'e sıkıştır
+        run: |
+          set -euo pipefail
+          if ! git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            echo "Veri dalı yok; bakım gerekmiyor."
+            exit 0
+          fi
+          git config user.name "arena-radar[bot]"
+          git config user.email "arena-radar@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch --depth=1 origin "$DATA_BRANCH"
+            git checkout -B "$DATA_BRANCH" FETCH_HEAD
+            staged="$(mktemp -d)"
+            for name in arena-live.json roster.json version.json; do
+              if [ -f "web/data/$name" ]; then cp "web/data/$name" "$staged/$name"; fi
+            done
+            git checkout --orphan "maintenance-${attempt}"
+            git rm -r --cached . >/dev/null 2>&1 || true
+            mkdir -p web/data
+            for name in arena-live.json roster.json version.json; do
+              if [ -f "$staged/$name" ]; then cp "$staged/$name" "web/data/$name"; fi
+            done
+            git add -f web/data
+            if ! git diff --cached --quiet; then
+              git commit -m "chore(radar): veri dalı bakımı $(date -u +'%Y-%m-%d')"
+            fi
+            # --force-with-lease: bu arada radar yeni veri bastıysa push reddedilir,
+            # döngü taze HEAD ile yeniden kurar. Veri kaybı olmaz.
+            if git push --force-with-lease origin "HEAD:${DATA_BRANCH}"; then
+              echo "Veri dalı tek commit'e indirildi (deneme ${attempt})."
+              exit 0
+            fi
+            echo "Eşzamanlı radar yayını algılandı; yeniden deneniyor (${attempt})."
+            git checkout -f main >/dev/null 2>&1 || git checkout -f --detach >/dev/null 2>&1 || true
+            sleep 5
+          done
+          echo "Bakım üç denemede tamamlanamadı." >&2
+          exit 1

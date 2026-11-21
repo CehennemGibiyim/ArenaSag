@@ -31,6 +31,7 @@
     lock: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     signal: '<path d="M4 19v-3M9 19v-7M14 19V9M19 19V5"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
+    close: '<path d="M6 6l12 12M18 6 6 18"/>',
   };
 
   function icon(name, size) {
@@ -118,7 +119,8 @@
 
   function sidebarMarkup() {
     return (
-      '<div class="brand"><span class="brand-mark">A</span><span><span class="brand-name">ARENA</span><span class="brand-sub">Live OS · V1.4</span></span></div>' +
+      '<div class="brand"><span class="brand-mark">A</span><span><span class="brand-name">ARENA</span><span class="brand-sub">Live OS · V1.4</span></span>' +
+      '<button class="icon-btn sidebar-close" data-close aria-label="Menüyü kapat">' + icon("close", 15) + "</button></div>" +
       '<nav class="nav" aria-label="Panel menüsü">' + navHtml() + "</nav>" +
       '<div class="connector-card"><div class="connector-head"><i class="dot" data-connector-dot></i><strong>GitHub Radar</strong></div>' +
       '<p data-connector-text>Tarama verisi bağlanıyor…</p>' +
@@ -157,16 +159,50 @@
 
     var menu = document.querySelector("[data-menu]");
     var backdrop = document.querySelector("[data-backdrop]");
+
+    // Perde, kenar çubuğuyla aynı yığın bağlamında olmalı. Sayfalarda perde
+    // .shell dışında duruyordu; .shell z-index:1 taşıdığı için perde (z-index:30)
+    // çekmeceyi örtüyor ve telefonda "buğulanmış ekran" olarak kalıyordu.
+    if (backdrop && sidebar && backdrop.parentElement !== sidebar.parentElement) {
+      sidebar.parentElement.insertBefore(backdrop, sidebar.nextSibling);
+    }
+
+    function setMenu(open) {
+      if (!sidebar) return;
+      sidebar.classList.toggle("open", open);
+      if (backdrop) backdrop.classList.toggle("show", open);
+      if (menu) menu.setAttribute("aria-expanded", open ? "true" : "false");
+      document.body.classList.toggle("nav-open", open);
+      if (open) {
+        var first = sidebar.querySelector(".nav-item");
+        if (first) first.focus({ preventScroll: true });
+      }
+    }
+
     if (menu && sidebar) {
+      menu.setAttribute("aria-expanded", "false");
       menu.addEventListener("click", function () {
-        sidebar.classList.add("open");
-        if (backdrop) backdrop.classList.add("show");
+        setMenu(!sidebar.classList.contains("open"));
       });
     }
-    if (backdrop && sidebar) {
+    if (backdrop) {
       backdrop.addEventListener("click", function () {
-        sidebar.classList.remove("open");
-        backdrop.classList.remove("show");
+        setMenu(false);
+      });
+    }
+    if (sidebar) {
+      sidebar.addEventListener("click", function (event) {
+        var target = event.target;
+        if (target.closest("[data-close]")) {
+          setMenu(false);
+          return;
+        }
+        // Aynı sayfa içi bağlantıda tarayıcı yeniden yükleme yapmaz; çekmece
+        // açık kalırsa içerik yine perdenin altında kalır.
+        if (target.closest(".nav-item") || target.closest(".connector-card a")) setMenu(false);
+      });
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") setMenu(false);
       });
     }
 

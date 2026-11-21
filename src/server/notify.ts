@@ -24,7 +24,10 @@ export async function sendNotification(text: string, rule = "arena-alert"): Prom
       const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "HTML", disable_web_page_preview: true }),
+        // parse_mode kullanılmıyor: kullanıcı adı veya hata metnindeki < > & gibi
+        // karakterler HTML olarak çözümlenip "can't parse entities" hatasıyla
+        // bildirimi sessizce düşürüyordu. Düz metin her zaman teslim edilir.
+        body: JSON.stringify({ chat_id: chatId, text: message, disable_web_page_preview: true }),
       });
       const payload = (await response.json()) as { ok?: boolean; description?: string };
       result = payload.ok

@@ -3,10 +3,10 @@ import { obj, type QuotaSample } from "@/lib/discovery-model";
 const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
 // These are Arena's conservative local budgets, not a promise of upstream capacity.
 // Distinct from the number of concurrently OPEN WebSockets. Provider denials always take priority.
-export const START_WINDOWS = [{ span: MIN, max: 3 }, { span: HOUR, max: 24 }, { span: DAY, max: 80 }];
+export const START_WINDOWS = [{ span: MIN, max: 8 }, { span: HOUR, max: 180 }, { span: DAY, max: 900 }];
 export function localCapacity(settings: { listenToAll: boolean; scanConcurrency: number }) {
-  const value = Number(process.env.ARENA_LISTENER_CEILING ?? 24);
-  const ceiling = Number.isSafeInteger(value) && value > 0 ? Math.min(value, 64) : 24;
+  const value = Number(process.env.ARENA_LISTENER_CEILING ?? 48);
+  const ceiling = Number.isSafeInteger(value) && value > 0 ? Math.min(value, 64) : 48;
   const configured = Number(settings.scanConcurrency);
   return settings.listenToAll ? ceiling : Math.min(ceiling, Math.max(1, Number.isSafeInteger(configured) ? configured : 5));
 }

@@ -77,7 +77,7 @@ export async function claimRoom(capacity: number, quota?: QuotaSample | null): P
     }
     if (!candidate) return null;
     // Space starts across replicas, without tearing down healthy sockets.
-    const next = new Date(now + 20_500);
+    const next = new Date(now + 8_000);
     const starts = [...budget.active, now];
     await tx.insert(providerGates).values({ provider: "listener", nextAt: next, reason: "Bağlantı başlatma aralığı", starts }).onConflictDoUpdate({ target: providerGates.provider,
       set: { nextAt: sql`greatest(${providerGates.nextAt}, excluded.next_at)`, starts, reason: sql`case when excluded.next_at >= ${providerGates.nextAt} then excluded.reason else ${providerGates.reason} end` } });

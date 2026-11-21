@@ -5,7 +5,7 @@ Panel kapalıyken bile GitHub Actions tarar; sonuç GitHub Pages'te yayınlanır
 
 [![Web paneli](https://img.shields.io/badge/panel-canl%C4%B1-25f4ee?style=flat-square)](https://cehennemgibiyim.github.io/ArenaSag/)
 [![Windows](https://img.shields.io/badge/Windows-kurulum%20paketi-fe2c55?style=flat-square)](https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe)
-[![Radar](https://img.shields.io/badge/GitHub%20Actions-5%20dakikada%20bir-7c5cff?style=flat-square)](https://github.com/CehennemGibiyim/ArenaSag/actions)
+[![Radar](https://img.shields.io/badge/GitHub%20Actions-10%20dakikada%20bir-7c5cff?style=flat-square)](https://github.com/CehennemGibiyim/ArenaSag/actions)
 
 > **Gerçek veri kuralı:** Sandık, jeton, kontenjan ve izleyici bilgisi yalnızca TikTok Webcast yanıtında açıkça göründüğünde gösterilir. Tahmin veya demo verisi üretilmez; veri yoksa liste boş kalır ve nedeni yazılır.
 
@@ -59,14 +59,15 @@ Kurulum paketi imzasızdır; kaynak kod bu depodadır.
 İki bağımsız kaynak sürekli tarar ve sonuçlar birleştirilir. Kullanıcı hiçbir taramayı elle başlatmak zorunda değildir.
 
 ```
-GitHub Actions · cron */5
+GitHub Actions · cron */10
   ├─ aday toplama: Tik.Tools, TikWM bölge örnekleri, yayıncı dizini, önceki odalar
   ├─ doğrulama: user/room → check_alive
   ├─ sandık zarfı: room/info → envelopeInfo / envelope_list
+  ├─ yayın kapısı: anlamlı değişiklik yoksa commit/deploy atlanır
   └─ arena-live.json + roster.json + version.json → commit (data dalı)
                                                 ├─ GitHub Pages (web paneli)
                                                 ├─ Windows Radar (5 sn'de bir ham veri)
-                                                └─ Tam panel → PostgreSQL üye defteri
+                                                └─ Tam panel → PostgreSQL (üye defteri + doğrulanmış yayınlar)
 
 Windows istemcisi · paket içindeki aynı tarayıcı
   ├─ kendi IP'sinden yerel keşif turu (varsayılan 5 dk)
@@ -83,8 +84,18 @@ Windows istemcisi · paket içindeki aynı tarayıcı
 ### Veri dalı (`data`)
 
 Tarama verisi `main` dalına yazılmaz. `arena-live.json`, `roster.json` ve `version.json`
-yalnızca `data` dalında tutulur; `main` sadece kodu taşır. Böylece günde ~288 veri
-commit'i kod geçmişini kirletmez, `git log` okunabilir kalır.
+yalnızca `data` dalında tutulur; `main` sadece kodu taşır. Böylece veri commit'leri
+kod geçmişini kirletmez, `git log` okunabilir kalır.
+
+**Yayın kapısı.** Her tarama `generatedAt`/`scanSeconds` alanlarını tazelediği için
+dosya bayt düzeyinde hep değişir. `scripts/data-changed.mjs` anlık görüntüyü anlamlı
+alanlarına indirger (canlı oda kümesi, sandık kümesi, üye defteri toplamı) ve commit +
+Pages deploy'unu yalnızca gerçek değişimde yapar. Veri 20 dakikadan eskiyse tazelik
+için yine yayınlanır. Böylece günde yüzlerce gereksiz deploy yerine birkaç yayın olur.
+
+**Veri dalı bakımı.** `data` dalı ayda bir `Data Branch Maintenance` işiyle tek commit'e
+sıkıştırılır (`--force-with-lease`, eşzamanlı radar yayını varsa yeniden dener).
+Dosyaların içeriği değişmez; raw/Pages adresleri HEAD'i okur.
 
 - Ham veri: `https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/data/web/data/arena-live.json`
 - GitHub Pages yayını `data` dalındaki dosyaları `web/` içine ekleyerek yapılır.
@@ -97,9 +108,33 @@ Defter gün geçtikçe büyür: kimse silinmez, yalnızca `lastSeen` / `lastLive
 
 - Gün bazında eklenen yeni yayıncı sayısı `roster.json → days[]` alanında tutulur.
 - Defter en fazla `ARENA_ROSTER_MAX` (varsayılan 20.000) yayıncı ve 90 günlük geçmiş tutar.
-- Tam panel açıkken her 30 dakikada bir defter PostgreSQL'e aktarılır
-  (`POST /api/roster/sync` ile elle de çalıştırılabilir). Yalnızca panelde olmayan
-  yayıncılar eklenir; mevcut izleyici/elmas/sandık verileri ezilmez.
+- Defter `firstSeen` artan sırayla sayfalanır (her turda 400 kişi) ve imleç
+  `settings.rosterSyncCursor` içinde tutulur. Böylece defter 2.000'i geçse de eski
+  üyeler dışarıda kalmaz; herkes sonunda PostgreSQL'e girer.
+- Sayfa tek bir toplu `insert … on conflict do nothing` ile yazılır; mevcut satırların
+  izleyici/elmas/sandık verileri ezilmez, yalnızca yeni yayıncılar eklenir.
+- `ETag` ile değişmeyen dosya yeniden indirilmez. Tam panel açıkken 30 dakikada bir,
+  elle `POST /api/roster/sync` ile çalışır (token veya yerel ağ gerekir).
+
+### Radar → PostgreSQL köprüsü
+
+Üye defteri yalnızca yayıncı listesini taşır. `src/server/radar-sync.ts` ayrıca
+`arena-live.json` içindeki **doğrulanmış canlı yayınları** `live_rooms`, **sandık
+zarflarını** `chests` tablosuna yazar (10 dakikada bir, `POST /api/radar/sync` ile elle).
+Radar verisi `stale` işaretliyse odalar canlı sayılmaz; geçmiş sandıklar atlanır.
+
+### Sağlık, uyarı ve saklama
+
+- `arena-live.json` ve `version.json` artık `stale`, `dataAgeMinutes` ve `health` taşır;
+  istemci verinin yaşını görebilir.
+- Tarama boş/hatalıysa devre kesici son iyi veriyi 24 saate kadar `stale` olarak yayında tutar.
+- Radar işi düşerse `alert` işi `radar-alert` etiketli GitHub issue açar/günceller; ilk
+  başarılı koşuda otomatik kapanır.
+- `src/server/retention.ts` günde bir kez eski sandıkları (45 gün), olayları (30 gün),
+  tarama görevlerini (14 gün) ve aktivite kayıtlarını (30 gün) temizler.
+- Şema migration'ları `drizzle/` altında; `npm run db:generate` / `npm run db:migrate`.
+  Açılışta `checkSchema()` eksik tablo/kolonu konsola ve aktivite akışına yazar.
+  Yedekleme: [docs/BACKUP.md](docs/BACKUP.md).
 
 ### Engellenmemek için
 
@@ -130,14 +165,14 @@ Ayrıntılı mimari: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md)
 
 | Sistem | Açıklama |
 | --- | --- |
-| **GitHub Radar** | Panel/oturum olmadan ~5 dakikada bir tarama; canlı yayınlar ve sandık zarfları JSON olarak yayınlanır |
+| **GitHub Radar** | Panel/oturum olmadan 10 dakikada bir tarama; anlamlı değişimde yayın, canlı yayınlar ve sandık zarfları JSON olarak |
 | **Windows Radar** | GitHub verisini 5 saniyede bir çeker; yerel keşif turu çalıştırır; sandık açılmadan bildirir |
 | **Canlı Stüdyo** | Chat, hediye, beğeni, takip olayları; hedef barı ve oturum geçmişi (tam panel) |
 | **Sandık Radarı** | Jeton ÷ kontenjan oranı, 12 hazır sekme, 9 sıralama anahtarı, QR ile telefondan katılma |
 | **Canlı Yayınlar** | Keşfedilen yayıncılar kalıcı; sabitleme, izleyici/sandık/en iyi oran takibi (tam panel) |
 | **Eşzamanlı tarayıcı** | Worker pool ile paralel oda dinleme; doğrulanan odalar kalıcı sıraya eklenir (tam panel) |
 | **Bölgesel keşif** | Desteklenen pazarlar dönüşümlü örneklenir; aday ve doğrulanmış oda sayıları ayrıdır |
-| **Üye defteri** | GitHub taramasının doğruladığı yayıncılar gün gün birikir; tam panel bunları PostgreSQL'e aktarır |
+| **Üye defteri** | GitHub taramasının doğruladığı yayıncılar gün gün birikir; tam panel sayfalı imleçle PostgreSQL'e aktarır |
 | **Yerel Agent** | Kendi bilgisayarında çalışan paralel toplayıcı; sandık + jeton akışını panele yazar |
 | **Chat Botu / Uyarılar** | Tetikleyici-yanıt kuralları, hediye eşik alarmları, overlay/ses/Telegram aksiyonları |
 | **Overlay Sunucusu** | OBS için hedef barı, top gifter, sohbet, alert ve stats widget'ları |

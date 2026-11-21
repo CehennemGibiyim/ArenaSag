@@ -3,24 +3,47 @@
  * Arena Radar — GitHub Actions üzerinde çalışan bağımsız tarayıcı.
  *
  * Panel, PostgreSQL veya kullanıcı oturumu gerektirmez. Kamuya açık TikTok
- * uçlarından aday yayıncıları toplar, canlılığı doğrular ve sandık zarfı
- * verilerini `web/data/arena-live.json` dosyasına yazar. GitHub Pages ve
+ * uçlarından aday yayıncıları toplar, canlılığı doğrular ve sandık/mektup
+ * zarfı verilerini `web/data/arena-live.json` dosyasına yazar. GitHub Pages ve
  * Windows Radar uygulaması bu dosyayı okur.
+ *
+ * Tarama artık iki aşamalıdır:
+ *   1. Keşif: aday havuzu doğrulanır (yeni yayıncılar üye defterine eklenir).
+ *   2. Oda nöbeti: bilinen tüm oda kimlikleri `check_alive` ile UCUZCA canlılık
+ *      kontrolünden geçer, ardından canlı odalar birkaç turda `room/info` ile
+ *      sandık/mektup için taranır. Böylece tek turda 40 oda değil, yüzlerce oda
+ *      görülür ve tur boyunca açılan sandıklar da yakalanır.
+ *   3. WebSocket dinleyicisi: `room/info` çoğu odada zarf alanı döndürmez;
+ *      sandık ve mektup yalnızca canlı akışta `WebcastEnvelopeMessage` olarak
+ *      düşer. En yoğun odalara paralel bağlanılıp bu mesajlar doğrudan
+ *      yakalanır ve aynı sandık listesine yazılır.
  *
  * Kullanım:
  *   node scripts/radar-publish.mjs
- *   ARENA_MAX_CHECKS=80 ARENA_REGIONS=TR,US,DE node scripts/radar-publish.mjs
+ *   ARENA_MAX_CHECKS=480 ARENA_CHEST_ROUNDS=4 node scripts/radar-publish.mjs
  *
  * Ortam değişkenleri:
- *   ARENA_REGIONS       Virgülle ayrılmış bölge kodları (varsayılan: TR + rotasyon)
- *   ARENA_MAX_CHECKS    Doğrulanacak en fazla aday (varsayılan 80)
- *   ARENA_MAX_ROOMS     Sandık için sorgulanacak en fazla canlı oda (varsayılan 45)
- *   ARENA_MAX_CHEST_AGE Saat cinsinden sandık hafızası (varsayılan 6)
- *   ARENA_STREAMERS     Ek yayıncı listesi (@a,@b)
- *   ARENA_OUT_DIR       Çıktı klasörü (varsayılan: web/data; Windows istemcisi kendi veri klasörünü verir)
- *   ARENA_OUT_FILE      Çıktı dosya adı (varsayılan: arena-live.json)
- *   ARENA_DATA_BRANCH   Verinin yayınlandığı dal (varsayılan: data)
- *   ARENA_ROSTER_MAX    Üye defterinde tutulacak en fazla yayıncı (varsayılan: 20000)
+ *   ARENA_REGIONS            Virgülle ayrılmış bölge kodları (varsayılan: TR + rotasyon)
+ *   ARENA_MAX_CHECKS         Doğrulanacak en fazla aday (varsayılan 800)
+ *   ARENA_MAX_ROOMS          Her sandık turunda sorgulanacak en fazla canlı oda (varsayılan 320)
+ *   ARENA_MAX_STREAMS        Listede tutulacak en fazla canlı yayın (varsayılan 240)
+ *   ARENA_CHEST_ROUNDS       Tur içinde yapılacak sandık taraması sayısı (varsayılan 4)
+ *   ARENA_CHEST_ROUND_GAP    Turlar arası saniye (varsayılan 45)
+ *   ARENA_BUDGET_SECONDS     Tarama için toplam süre bütçesi (varsayılan 540)
+ *   ARENA_MAX_CHEST_AGE      Saat cinsinden sandık hafızası (varsayılan 12)
+ *   ARENA_ENVELOPE_ROOMS     WebSocket ile dinlenecek oda sayısı (varsayılan 40, 0 = kapalı)
+ *   ARENA_ENVELOPE_SECONDS   Dinleme süresi (varsayılan 180)
+ *   ARENA_ENVELOPE_CONCURRENCY Aynı anda açık WebSocket sayısı (varsayılan 12)
+ *   EULER_API_KEY            Tanımlıysa WebSocket imzalamasında kullanılır
+ *   ARENA_VERIFY_CONCURRENCY Aday doğrulama eşzamanlılığı (varsayılan 8)
+ *   ARENA_ROOM_CONCURRENCY   Oda sorgulama eşzamanlılığı (varsayılan 10)
+ *   ARENA_STREAMERS          Ek yayıncı listesi (@a,@b)
+ *   ARENA_OUT_DIR            Çıktı klasörü (varsayılan: web/data)
+ *   ARENA_OUT_FILE           Çıktı dosya adı (varsayılan: arena-live.json)
+ *   ARENA_DATA_BRANCH        Verinin yayınlandığı dal (varsayılan: data)
+ *   ARENA_ROSTER_MAX         Üye defterinde tutulacak en fazla yayıncı (varsayılan: 20000)
+ *   SUPABASE_URL             Ayarlıysa üye defteri ve sandıklar Supabase'e yazılır
+ *   SUPABASE_SERVICE_ROLE_KEY Supabase yazma anahtarı (yalnızca Actions secret'ı)
  *
  * Ayrıca `roster.json` yazar: her taramada doğrulanan yayıncıların gün gün
  * büyüyen, kimsenin silinmediği listesi. Veri `data` dalına işlenir; `main`
@@ -29,6 +52,9 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateRoster, validateSnapshot } from "./radar-contract.mjs";
+import { watchEnvelopes } from "./envelope-watch.mjs";
+import { mirrorToSupabase } from "./supabase-mirror.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = process.env.ARENA_OUT_DIR
@@ -43,18 +69,34 @@ const DIRECTORY_URL =
   "https://raw.githubusercontent.com/CehennemGibiyim/TikTok/main/site/firsat/data/targets.json";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
-const MAX_CHECKS = clamp(Number(process.env.ARENA_MAX_CHECKS || 80), 10, 160);
-const MAX_ROOMS = clamp(Number(process.env.ARENA_MAX_ROOMS || 45), 5, 120);
-const MAX_CHEST_AGE_MS = clamp(Number(process.env.ARENA_MAX_CHEST_AGE || 6), 1, 24) * 3_600_000;
-const MAX_CHESTS = 240;
+const MAX_CHECKS = clamp(Number(process.env.ARENA_MAX_CHECKS || 1000), 40, 1600);
+const MAX_ROOMS = clamp(Number(process.env.ARENA_MAX_ROOMS || 420), 20, 900);
+const MAX_STREAMS = clamp(Number(process.env.ARENA_MAX_STREAMS || 300), 10, 600);
+const CHEST_ROUNDS = clamp(Number(process.env.ARENA_CHEST_ROUNDS || 6), 1, 8);
+const ENVELOPE_ROOMS = clamp(Number(process.env.ARENA_ENVELOPE_ROOMS || 40), 0, 200);
+const ENVELOPE_SECONDS = clamp(Number(process.env.ARENA_ENVELOPE_SECONDS || 180), 0, 600);
+const ENVELOPE_CONCURRENCY = clamp(Number(process.env.ARENA_ENVELOPE_CONCURRENCY || 12), 1, 40);
+const CHEST_ROUND_GAP_MS = clamp(Number(process.env.ARENA_CHEST_ROUND_GAP || 45), 10, 180) * 1000;
+const VERIFY_CONCURRENCY = clamp(Number(process.env.ARENA_VERIFY_CONCURRENCY || 8), 1, 16);
+const ROOM_CONCURRENCY = clamp(Number(process.env.ARENA_ROOM_CONCURRENCY || 10), 1, 20);
+const MAX_CHEST_AGE_MS = clamp(Number(process.env.ARENA_MAX_CHEST_AGE || 12), 1, 48) * 3_600_000;
+const MAX_CHESTS = 500;
+// Bir oda iki tur üst üste zarfı bildirmezse sandık "kapandı" sayılır.
+const CHEST_MISS_LIMIT = 2;
+// Kapanan sandık, kullanıcı sonucu görebilsin diye bir süre listede kalır.
+const CLOSED_CHEST_KEEP_MS = 20 * 60_000;
 const DATA_BRANCH = process.env.ARENA_DATA_BRANCH || "data";
 const ROSTER_FILE = path.join(OUT_DIR, "roster.json");
 const ROSTER_MAX = clamp(Number(process.env.ARENA_ROSTER_MAX || 20_000), 200, 50_000);
 const ROSTER_DAY_MAX = 90;
 const MAX_ATTEMPTS = 3;
 const RETRYABLE = new Set([403, 408, 429, 500, 502, 503, 504]);
-const DEADLINE = Date.now() + 4 * 60_000;
 const NOW = Date.now();
+const BUDGET_MS = clamp(Number(process.env.ARENA_BUDGET_SECONDS || 780), 120, 1500) * 1000;
+const DEADLINE = NOW + BUDGET_MS;
+// Keşif, zarf dinleyicisinin penceresini yemesin: dinleme için süre ayrılır.
+const DISCOVERY_DEADLINE =
+  NOW + Math.max(60_000, BUDGET_MS - (ENVELOPE_ROOMS > 0 ? Math.min(ENVELOPE_SECONDS, 300) * 1000 : 0));
 
 const TIKTOK_REGIONS = [
   "TR", "US", "DE", "GB", "FR", "NL", "IT", "ES", "SA", "AE", "EG", "MA",
@@ -90,7 +132,7 @@ const regionCode = (value) => {
 function timestampSeconds(value) {
   if (value === undefined || value === null || value === "") return 0;
   const raw = typeof value === "string" ? Number(value) : value;
-  if (typeof raw !== "number" || !Number.isFinite(raw)) return 0;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return 0;
   const ms = raw < 1e12 ? raw * 1000 : raw;
   if (ms < NOW - 6 * 3_600_000 || ms > NOW + 24 * 3_600_000) return 0;
   return Math.floor(ms / 1000);
@@ -222,7 +264,7 @@ function mergeRoster(roster, streams) {
       roomId: roomKey(stream.roomId) || previousRow?.roomId || "",
       firstSeen: previousRow?.firstSeen || nowIso,
       lastSeen: nowIso,
-      lastLiveAt: nowIso,
+      lastLiveAt: stream.stale ? previousRow?.lastLiveAt || nowIso : nowIso,
       liveCount: (previousRow?.liveCount || 0) + (stream.stale ? 0 : 1),
     };
     if (!previousRow) isNew.push(username);
@@ -285,7 +327,7 @@ function parseTicker(payload) {
 }
 
 async function fetchDirectory() {
-  const payload = await getJson(DIRECTORY_URL, 9_000);
+  const payload = await getJson(DIRECTORY_URL, 12_000);
   const rows = list(obj(payload).targets).slice(0, 12_000);
   return rows
     .map((row) => ({
@@ -355,9 +397,15 @@ async function userRoom(username) {
   };
 }
 
+/**
+ * Toplu canlılık: elli oda kimliği tek istekte sorulur. Oda kimliği bilinen
+ * her yayıncı için tek tek `user/room` çağırmaktan çok daha ucuz olduğu için
+ * sandık nöbetinin omurgası budur.
+ */
 async function checkAlive(roomIds) {
   const alive = new Map();
   for (let i = 0; i < roomIds.length; i += 50) {
+    if (Date.now() > DISCOVERY_DEADLINE) break;
     const chunk = roomIds.slice(i, i + 50);
     try {
       const params = new URLSearchParams({ aid: "1988", room_ids: chunk.join(",") });
@@ -374,39 +422,76 @@ async function checkAlive(roomIds) {
   return alive;
 }
 
-function parseEnvelope(raw, fallbackRoomId) {
+/**
+ * Oda yükündeki olası ödül kapsayıcıları. TikTok sandığı `envelope_info`
+ * içinde verir; aynı yapı mektup/parsel/çanta için farklı adlarla da
+ * görülebildiğinden hepsi aynı normalize ediciyle okunur.
+ */
+const REWARD_CONTAINERS = [
+  "envelopeInfo", "envelope_info",
+  "envelopeList", "envelope_list",
+  "redEnvelopeInfo", "red_envelope_info",
+  "redEnvelopeList", "red_envelope_list",
+  "letterInfo", "letter_info",
+  "letterList", "letter_list",
+  "parcelInfo", "parcel_info",
+  "luckyBag", "lucky_bag",
+  "goodyBag", "goody_bag",
+];
+
+function parseReward(raw, fallbackRoomId, container = "") {
   const record = obj(raw);
-  const info = obj(record.envelopeInfo ?? record.envelope_info ?? record);
-  const envelopeId = str(info.envelopeId ?? info.envelope_id, 80);
-  const coins = integer(info.diamondCount ?? info.diamond_count);
-  const slots = integer(info.peopleCount ?? info.people_count);
-  const opensAt = timestampSeconds(info.unpackAt ?? info.unpack_at);
+  const info = obj(record.envelopeInfo ?? record.envelope_info ?? record.envelope ?? record.letterInfo ?? record);
+  const nested = obj(info.info ?? info.reward ?? info.detail ?? {});
+  const pick = (...keys) => {
+    for (const key of keys) {
+      for (const source of [info, nested, record]) {
+        const value = source[key];
+        if (value !== undefined && value !== null && value !== "") return value;
+      }
+    }
+    return undefined;
+  };
+  const envelopeId = str(pick("envelopeId", "envelope_id", "letterId", "letter_id", "parcelId", "parcel_id"), 80);
+  const coins = integer(pick("diamondCount", "diamond_count", "coins", "coinCount", "coin_count", "amount"));
+  const slots = integer(pick("peopleCount", "people_count", "slots", "slotCount", "slot_count", "count"));
+  const opensAt = timestampSeconds(pick("unpackAt", "unpack_at", "openAt", "open_at", "expireAt", "expire_at"));
   if (!envelopeId || !coins || !slots || !opensAt) return null;
-  const skinId = integer(info.skinId ?? info.skin_id) || 1;
   return {
     envelopeId,
-    roomId: roomKey(info.roomId ?? info.room_id) || fallbackRoomId,
+    roomId: roomKey(pick("roomId", "room_id")) || fallbackRoomId,
     coins,
     slots,
     opensAt,
-    skinId,
-    businessType: integer(info.businessType ?? info.business_type) || 1,
+    skinId: integer(pick("skinId", "skin_id")) || 1,
+    businessType: integer(pick("businessType", "business_type")) || 1,
+    container,
   };
 }
 
 function roomRewards(data, roomId) {
   const rewards = [];
-  for (const key of ["envelopeInfo", "envelope_info", "envelopeList", "envelope_list"]) {
-    const value = data[key];
-    for (const entry of list(value).slice(0, 20)) {
-      const parsed = parseEnvelope(entry, roomId);
-      if (parsed) rewards.push(parsed);
+  const seen = new Set();
+  for (const container of REWARD_CONTAINERS) {
+    const value = data[container];
+    const entries = Array.isArray(value) ? value.slice(0, 20) : value ? [value] : [];
+    for (const entry of entries) {
+      const parsed = parseReward(entry, roomId, container);
+      if (parsed && !seen.has(parsed.envelopeId)) {
+        seen.add(parsed.envelopeId);
+        rewards.push(parsed);
+      }
     }
   }
   return rewards;
 }
 
-function variantOf(skinId) {
+/** businessType -> okunabilir ad (tik.tools: 1 sandık, 19 süper hayran, 20 spark). */
+const BUSINESS_LABELS = { 1: "coins", 19: "super_fan_box", 20: "spark_box" };
+
+function variantOf(skinId, container = "") {
+  if (/letter|parcel|mektup/i.test(container)) return { kind: "letter", variant: "letter" };
+  if (/goody|bag/i.test(container)) return { kind: "bag", variant: `l${Number(skinId) || 0}` };
   if (Number(skinId) === 0) return { kind: "bag", variant: "l0" };
   if (Number(skinId) === 2) return { kind: "chest", variant: "gold" };
   if (Number(skinId) === 3) return { kind: "chest", variant: "hanging" };
@@ -432,7 +517,7 @@ async function roomInfo(roomId) {
       rewards: roomRewards(data, roomId),
     };
   } catch (error) {
-    errors.push(`room_info(${roomId}): ${error instanceof Error ? error.message : "hata"}`);
+    if (errors.length < 40) errors.push(`room_info(${roomId}): ${error instanceof Error ? error.message : "hata"}`);
     return null;
   }
 }
@@ -443,7 +528,7 @@ const previousRoster = await readRoster();
 const candidates = new Map();
 
 // 1) Önceki taramanın canlı odaları — oda kimlikleri korunur, tekrar arama gerekmez.
-for (const stream of previous.streams.slice(0, 30)) {
+for (const stream of previous.streams.slice(0, 60)) {
   addCandidate(candidates, { ...stream, source: "previous" });
 }
 // 2) Açık TikTok örneklemi.
@@ -465,131 +550,341 @@ try {
 }
 const marketResults = await Promise.allSettled(regionsPicked.map((region) => fetchMarket(region)));
 for (const result of marketResults) {
-  if (result.status === "fulfilled") for (const row of result.value.slice(0, 10)) addCandidate(candidates, row);
+  if (result.status === "fulfilled") for (const row of result.value.slice(0, 12)) addCandidate(candidates, row);
   else errors.push(`tikwm: ${result.reason instanceof Error ? result.reason.message : "hata"}`);
 }
-// 4) Kamuya açık yayıncı dizini — büyük listeden dönen bir örneklem alınır.
+// 4) Kamuya açık yayıncı dizini — büyük listeden dönen, her turda kayan bir örneklem.
 try {
   const rows = await fetchDirectory();
   const offset = rows.length ? Math.floor(NOW / 300_000) % rows.length : 0;
-  for (let i = 0; i < Math.min(40, rows.length); i += 1) addCandidate(candidates, rows[(offset + i) % rows.length]);
+  for (let i = 0; i < Math.min(200, rows.length); i += 1) addCandidate(candidates, rows[(offset + i) % rows.length]);
 } catch (error) {
   errors.push(`dizin: ${error instanceof Error ? error.message : "hata"}`);
 }
-// 5) Elle verilen ek hesaplar.
-for (const name of String(process.env.ARENA_STREAMERS || "").split(",")) {
+// 5) Kendi üye defterimizden rotasyonlu örneklem: dış kaynaklar engellendiğinde de
+//    aday üretilir ve doğrulanmış havuz her turda kullanılır.
+const rosterPool = list(previousRoster.streamers);
+if (rosterPool.length) {
+  const offset = Math.floor(NOW / (10 * 60_000)) % rosterPool.length;
+  for (let i = 0; i < Math.min(120, rosterPool.length); i += 1) {
+    const row = obj(rosterPool[(offset + i) % rosterPool.length]);
+    addCandidate(candidates, {
+      username: row.username,
+      nickname: row.nickname,
+      roomId: row.roomId,
+      region: row.region,
+      source: "roster",
+    });
+  }
+}
+// 6) Elle verilen ek hesaplar.
+for (const name of String(process.env.ARENA_STREAMS || process.env.ARENA_STREAMERS || "").split(",")) {
   addCandidate(candidates, { username: name, source: "streamers" });
 }
 
 const pool = [...candidates.values()].slice(0, MAX_CHECKS);
-const verified = await mapLimit(pool, 4, async (candidate) => {
-  if (Date.now() > DEADLINE) return null;
+const verified = await mapLimit(pool, VERIFY_CONCURRENCY, async (candidate) => {
+  if (Date.now() > DISCOVERY_DEADLINE) return null;
   try {
     const info = await userRoom(candidate.username);
     if (!info) return null;
     return { ...candidate, ...info, username: candidate.username, source: candidate.source };
   } catch (error) {
-    errors.push(`user_room(@${candidate.username}): ${error instanceof Error ? error.message : "hata"}`);
+    if (errors.length < 40) errors.push(`user_room(@${candidate.username}): ${error instanceof Error ? error.message : "hata"}`);
     return null;
   }
 });
 
 const found = verified.filter(Boolean);
-const aliveMap = await checkAlive([...new Set(found.map((row) => row.roomId))]);
-const live = found.filter((row) => aliveMap.get(row.roomId) === true);
-live.sort((a, b) => (b.status === 2 ? 1 : 0) - (a.status === 2 ? 1 : 0));
 
-const detailed = (
-  await mapLimit(live.slice(0, MAX_ROOMS), 4, async (row) => {
-    if (Date.now() > DEADLINE) return null;
-    const info = await roomInfo(row.roomId);
-    if (!info) return null;
-    return {
-      username: row.username,
-      nickname: info.nickname || row.nickname,
-      title: info.title || row.title,
-      roomId: row.roomId,
-      viewers: info.viewers || 0,
-      region: info.region || row.region || "",
-      avatar: info.avatar || row.avatar || "",
-      thumb: info.thumb || "",
-      source: row.source,
-      rewards: info.rewards,
-      verifiedAt: new Date().toISOString(),
-    };
-  })
-).filter(Boolean);
+/* -------------------------------------------------------------------------- */
+/*  Oda nöbeti — bilinen tüm odalar ucuz canlılık kontrolünden geçer            */
+/* -------------------------------------------------------------------------- */
 
-const streams = detailed
-  .map(({ rewards, ...stream }) => ({
-    ...stream,
+const universe = new Map();
+const noteRoom = (row) => {
+  const roomId = roomKey(row.roomId);
+  if (!roomId) return;
+  const existing = universe.get(roomId) || {};
+  universe.set(roomId, {
+    roomId,
+    username: handle(row.username) || existing.username || "",
+    nickname: str(row.nickname, 80) || existing.nickname || "",
+    title: str(row.title, 160) || existing.title || "",
+    avatar: str(row.avatar, 500) || existing.avatar || "",
+    region: regionCode(row.region) || existing.region || "",
+    viewers: integer(row.viewers) || existing.viewers || 0,
+    source: row.source || existing.source || "previous",
+  });
+};
+
+for (const row of found) noteRoom(row);
+for (const row of previous.streams) if (!obj(row).stale) noteRoom(row);
+for (const row of rosterPool) noteRoom(obj(row));
+
+const aliveMap = await checkAlive([...universe.keys()]);
+const aliveIds = new Set([...aliveMap.entries()].filter(([, value]) => value === true).map(([id]) => id));
+// check_alive bir bölgede yanıt vermezse, doğrulanmış odalar yine taranır.
+for (const row of found) if (!aliveMap.has(row.roomId)) aliveIds.add(row.roomId);
+
+const previousChests = new Map(
+  previous.chests
+    .filter((chest) => chest && chest.envelopeId)
+    .map((chest) => [str(chest.envelopeId, 80), chest]),
+);
+// Sandığı görülen odalar her turda önce taranır: sandık akışının en yoğun yeri.
+const hotRooms = new Set(
+  previous.chests.map((chest) => roomKey(chest.roomId)).filter(Boolean),
+);
+
+const order = [...aliveIds]
+  .map((roomId) => [roomId, universe.get(roomId) || { roomId, username: "", nickname: "", title: "", avatar: "", region: "", viewers: 0, source: "previous" }])
+  .sort((a, b) => (hotRooms.has(b[0]) ? 1 : 0) - (hotRooms.has(a[0]) ? 1 : 0) || b[1].viewers - a[1].viewers);
+
+// WebSocket zarf dinleyicisi oda nöbetiyle PARALEL çalışır: dinleme sürerken
+// `room/info` turları da ilerler. Zarf yalnızca canlı akışta göründüğü için
+// asıl yakalama yolu budur.
+const watchRooms = order.slice(0, ENVELOPE_ROOMS).map(([roomId, meta]) => ({ ...meta, roomId }));
+const watchSeconds = Math.min(ENVELOPE_SECONDS, Math.max(0, Math.round((DEADLINE - Date.now()) / 1000)));
+const watchPromise =
+  watchRooms.length && watchSeconds >= 20
+    ? watchEnvelopes({
+        rooms: watchRooms,
+        seconds: watchSeconds,
+        // Ücretsiz imzalama dakikada birkaç bağlantıya izin verir; anahtar varsa tavan açılır.
+        concurrency: process.env.EULER_API_KEY ? ENVELOPE_CONCURRENCY : Math.min(6, ENVELOPE_CONCURRENCY),
+        apiKey: process.env.EULER_API_KEY || "",
+        log: (line) => console.log(`[arena-radar] ${line}`),
+      }).catch((error) => ({ connected: 0, failed: 0, envelopes: [], messageTypes: {}, errors: [`ws: ${error instanceof Error ? error.message : "hata"}`], seconds: 0 }))
+    : Promise.resolve(null);
+
+const chests = new Map(previousChests);
+const streams = new Map();
+const rounds = [];
+let roomsScanned = 0;
+
+const applyReward = (reward, stream) => {
+  if (reward.roomId && reward.roomId !== stream.roomId) return false;
+  const opensMs = reward.opensAt * 1000;
+  const previousRow = chests.get(reward.envelopeId);
+  const { kind, variant } = variantOf(reward.skinId, reward.container);
+  const nowIso = new Date().toISOString();
+  chests.set(reward.envelopeId, {
+    envelopeId: reward.envelopeId,
+    kind,
+    variant,
+    skinId: reward.skinId,
+    businessType: reward.businessType,
+    businessLabel: BUSINESS_LABELS[reward.businessType] ?? "coins",
+    labels: reward.container ? [reward.container] : [],
+    username: stream.username,
+    nickname: stream.nickname,
+    title: stream.title,
+    roomId: stream.roomId,
+    coins: reward.coins,
+    slots: reward.slots,
+    ratio: Math.round((reward.coins / Math.max(1, reward.slots)) * 100) / 100,
+    viewers: stream.viewers,
+    opensAt: new Date(opensMs).toISOString(),
+    // Sandığın süresi dolduktan sonra hâlâ odada durup durmadığını bilmek için
+    // durum ve son görülme zamanı tutulur; süre bitince kayıt silinmez.
+    status: opensMs > Date.now() ? "waiting" : "open",
+    detectedAt: previousRow?.detectedAt || nowIso,
+    lastSeenAt: nowIso,
+    seenCount: (integer(previousRow?.seenCount) || 0) + 1,
+    missingCount: 0,
+    closedAt: "",
     openUrl: `https://www.tiktok.com/@${stream.username}/live`,
     deepLink: `snssdk1233://live?room_id=${stream.roomId}`,
-  }))
-  .sort((a, b) => b.viewers - a.viewers);
+  });
+  return true;
+};
 
-// Geçici kaynak hatasında pano boşalmasın: 30 dakikadan yeni önceki yayınlar korunur.
-const currentIds = new Set(streams.map((row) => row.roomId));
+const noteStream = (row) => {
+  const username = handle(row.username);
+  if (!username) return;
+  const existing = streams.get(username);
+  if (existing && existing.viewers >= (row.viewers || 0)) return;
+  streams.set(username, {
+    username,
+    nickname: str(row.nickname, 80) || username,
+    title: str(row.title, 160),
+    roomId: roomKey(row.roomId),
+    viewers: integer(row.viewers),
+    region: regionCode(row.region),
+    avatar: str(row.avatar, 500),
+    thumb: str(row.thumb, 500),
+    source: row.source || "previous",
+    verifiedAt: new Date().toISOString(),
+    openUrl: `https://www.tiktok.com/@${username}/live`,
+    deepLink: `snssdk1233://live?room_id=${roomKey(row.roomId)}`,
+  });
+};
+
+for (let round = 0; round < CHEST_ROUNDS && order.length; round += 1) {
+  if (Date.now() > DEADLINE) break;
+  const start = (round * MAX_ROOMS) % order.length;
+  const slice = [];
+  for (let i = 0; i < Math.min(MAX_ROOMS, order.length); i += 1) slice.push(order[(start + i) % order.length]);
+  // Sandık görülen odalar her turda taranır; yoksa tur sırası kaydırılır.
+  for (const roomId of hotRooms) {
+    if (slice.length >= MAX_ROOMS) break;
+    const row = order.find((entry) => entry[0] === roomId);
+    if (row && !slice.includes(row)) slice.push(row);
+  }
+  const scannedThisRound = new Set();
+  const observedThisRound = new Set();
+  await mapLimit(slice, ROOM_CONCURRENCY, async ([roomId, meta]) => {
+    if (Date.now() > DEADLINE) return null;
+    scannedThisRound.add(roomId);
+    const info = await roomInfo(roomId);
+    if (!info) return null;
+    const stream = {
+      username: info.username || meta.username,
+      nickname: info.nickname || meta.nickname,
+      title: info.title || meta.title,
+      roomId,
+      viewers: info.viewers || meta.viewers || 0,
+      region: info.region || meta.region,
+      avatar: info.avatar || meta.avatar,
+      thumb: info.thumb,
+      source: meta.source,
+    };
+    noteStream(stream);
+    for (const reward of info.rewards) {
+      if (applyReward(reward, stream)) observedThisRound.add(reward.envelopeId);
+    }
+    return null;
+  });
+  roomsScanned += scannedThisRound.size;
+  // Taranan odada görülmeyen sandık "eksik" sayılır; iki tur üst üste
+  // görülmezse kapanmış kabul edilir ama süresi doldu diye silinmez.
+  for (const [envelopeId, chest] of chests) {
+    if (observedThisRound.has(envelopeId)) continue;
+    if (!scannedThisRound.has(roomKey(chest.roomId))) continue;
+    chest.missingCount = (integer(chest.missingCount) || 0) + 1;
+    if (chest.missingCount >= CHEST_MISS_LIMIT && chest.status !== "closed") {
+      chest.status = "closed";
+      chest.closedAt = new Date().toISOString();
+    }
+  }
+  rounds.push({ round: round + 1, rooms: scannedThisRound.size, chests: observedThisRound.size });
+  if (round < CHEST_ROUNDS - 1) {
+    await sleep(Math.max(0, Math.min(CHEST_ROUND_GAP_MS, DEADLINE - Date.now())));
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  WebSocket zarflarını sandık listesine işle                                 */
+/* -------------------------------------------------------------------------- */
+
+const watch = await watchPromise;
+const wsEnvelopes = [];
+for (const reward of watch?.envelopes ?? []) {
+  let meta = universe.get(reward.roomId);
+  if (!obj(meta) || !handle(meta.username)) {
+    const info = await roomInfo(reward.roomId);
+    if (!info) continue;
+    meta = { roomId: reward.roomId, ...info };
+    noteRoom(meta);
+  }
+  const stream = {
+    username: meta.username,
+    nickname: meta.nickname,
+    title: meta.title,
+    roomId: reward.roomId,
+    viewers: integer(meta.viewers),
+    region: meta.region,
+    avatar: meta.avatar,
+    thumb: "",
+    source: "websocket",
+  };
+  if (!handle(stream.username)) continue;
+  if (applyReward(reward, stream)) {
+    wsEnvelopes.push(reward.envelopeId);
+    noteStream(stream);
+  }
+}
+for (const error of (watch?.errors ?? []).slice(0, 3)) errors.push(error);
+
+/* -------------------------------------------------------------------------- */
+/*  Yayın ve sandık listesi                                                    */
+/* -------------------------------------------------------------------------- */
+
+const streamList = [...streams.values()]
+  .sort((a, b) => b.viewers - a.viewers)
+  .slice(0, MAX_STREAMS)
+  .map((row) => ({ ...row, deepLink: `snssdk1233://live?room_id=${row.roomId}` }));
+
+// Devre kesici: ağ tamamen çöktüyse pano boşalmasın, son iyi veri 24 saat
+// "stale" işaretiyle yayında kalır.
+const degraded = streamList.length === 0 || (errors.length >= 12 && streamList.length < 5);
+const keepWindowMs = degraded ? 24 * 60 * 60_000 : 30 * 60_000;
+const currentIds = new Set(streamList.map((row) => row.roomId));
 for (const old of previous.streams) {
   if (currentIds.has(old.roomId)) continue;
   const verifiedAt = Date.parse(old.verifiedAt || old.detectedAt || 0);
-  if (Number.isFinite(verifiedAt) && NOW - verifiedAt < 30 * 60_000) {
-    streams.push({ ...old, stale: true });
+  if (Number.isFinite(verifiedAt) && NOW - verifiedAt < keepWindowMs) {
+    streamList.push({ ...old, stale: true });
     currentIds.add(old.roomId);
   }
 }
 
 // Üye defteri: doğrulanmış yayıncılar gün gün birikir, hiçbiri silinmez.
-const roster = mergeRoster(previousRoster, streams);
+const roster = mergeRoster(previousRoster, streamList);
 
-const chests = new Map();
-const knownChest = new Map(
-  previous.chests
-    .filter((chest) => chest && chest.envelopeId)
-    .map((chest) => [str(chest.envelopeId, 80), chest]),
-);
-for (const stream of detailed) {
-  for (const reward of stream.rewards) {
-    if (reward.roomId && reward.roomId !== stream.roomId) continue;
-    const known = knownChest.get(reward.envelopeId);
-    const opensAt = new Date(reward.opensAt * 1000);
-    const secondsLeft = Math.round((opensAt.getTime() - NOW) / 1000);
-    if (secondsLeft < -90 || secondsLeft > 24 * 60 * 60) continue;
-    const { kind, variant } = variantOf(reward.skinId);
-    chests.set(reward.envelopeId, {
-      envelopeId: reward.envelopeId,
-      kind,
-      variant,
-      skinId: reward.skinId,
-      businessType: reward.businessType,
-      username: stream.username,
-      nickname: stream.nickname,
-      title: stream.title,
-      roomId: stream.roomId,
-      coins: reward.coins,
-      slots: reward.slots,
-      ratio: Math.round((reward.coins / Math.max(1, reward.slots)) * 100) / 100,
-      viewers: stream.viewers,
-      opensAt: opensAt.toISOString(),
-      detectedAt: known?.detectedAt || new Date().toISOString(),
-      openUrl: stream.openUrl,
-      deepLink: stream.deepLink,
-    });
-  }
-}
-// Bu turda görülmeyen ama süresi dolmamış sandıklar listede kalır.
-for (const chest of previous.chests) {
-  const envelopeId = str(chest?.envelopeId, 80);
-  if (!envelopeId || chests.has(envelopeId)) continue;
-  const opensMs = Date.parse(chest.opensAt || "");
-  const detectedMs = Date.parse(chest.detectedAt || "");
-  if (!Number.isFinite(opensMs) || opensMs < NOW - 90_000) continue;
-  if (!Number.isFinite(detectedMs) || NOW - detectedMs > MAX_CHEST_AGE_MS) continue;
-  chests.set(envelopeId, chest);
-}
 const chestList = [...chests.values()]
-  .sort((a, b) => Date.parse(a.opensAt) - Date.parse(b.opensAt))
+  .filter((chest) => {
+    const envelopeId = str(chest?.envelopeId, 80);
+    if (!envelopeId) return false;
+    const seenMs = Date.parse(chest.lastSeenAt || chest.detectedAt || "");
+    // Sandık, odada görüldüğü sürece yaşı ne olursa olsun listede kalır.
+    if (!Number.isFinite(seenMs) || NOW - seenMs > MAX_CHEST_AGE_MS) return false;
+    const closedMs = Date.parse(chest.closedAt || "");
+    if (chest.status === "closed" && Number.isFinite(closedMs) && NOW - closedMs > CLOSED_CHEST_KEEP_MS) return false;
+    return true;
+  })
+  .map((chest) => {
+    const opensMs = Date.parse(chest.opensAt || "");
+    const opensInMs = Number.isFinite(opensMs) ? opensMs - NOW : 0;
+    const status = chest.status === "closed" ? "closed" : opensInMs > 0 ? "waiting" : "open";
+    return { ...chest, status, secondsLeft: Math.round(opensInMs / 1000) };
+  })
+  .sort((a, b) => {
+    const rank = (row) => (row.status === "waiting" ? 0 : row.status === "open" ? 1 : 2);
+    return rank(a) - rank(b) || Date.parse(a.opensAt) - Date.parse(b.opensAt);
+  })
   .slice(0, MAX_CHESTS);
+
+// Sağlık özeti: panel ve Windows istemcisi verinin yaşını ve bayat işaretini görür.
+const stale = degraded && streamList.length > 0;
+const newestVerified = streamList.reduce((latest, row) => {
+  const at = Date.parse(row.verifiedAt || "");
+  return Number.isFinite(at) && at > latest ? at : latest;
+}, 0);
+const dataAgeMinutes = newestVerified ? Math.max(0, Math.round((NOW - newestVerified) / 60_000)) : null;
+const health = {
+  ok: !stale,
+  stale,
+  degraded,
+  dataAgeMinutes,
+  live: streamList.length,
+  chests: chestList.length,
+  chestsWaiting: chestList.filter((row) => row.status === "waiting").length,
+  chestsOpen: chestList.filter((row) => row.status === "open").length,
+  letters: chestList.filter((row) => row.kind === "letter").length,
+  roomsAlive: aliveIds.size,
+  roomsScanned,
+  rounds: rounds.length,
+  // WebSocket kanıtı: kaç oda dinlendi, kaç zarf mesajı çözüldü, kaç zarf okundu.
+  wsRooms: watch?.connected ?? 0,
+  wsEnvelopes: watch?.envelopes.length ?? 0,
+  wsMessages: Object.values(watch?.messageTypes ?? {}).reduce((sum, n) => sum + n, 0),
+  wsRateLimited: Boolean(watch?.rateLimited) || (watch?.rateLimitHits ?? 0) > 0,
+  wsRateLimitHits: watch?.rateLimitHits ?? 0,
+  errors: errors.length,
+  roster: roster.streamers.length,
+};
 
 const snapshot = {
   schema: 1,
@@ -597,21 +892,56 @@ const snapshot = {
   repo: REPO,
   generatedAt: new Date().toISOString(),
   scanSeconds: Math.round((Date.now() - NOW) / 1000),
-  nextScanHintSeconds: 300,
+  nextScanHintSeconds: 600,
+  stale,
+  dataAgeMinutes,
+  health,
   stats: {
     candidates: candidates.size,
     checked: found.length,
-    live: streams.length,
+    live: streamList.length,
     chests: chestList.length,
+    letters: health.letters,
+    chestRounds: rounds.length,
+    roomsAlive: aliveIds.size,
+    roomsScanned,
+    wsRooms: health.wsRooms,
+    wsEnvelopes: wsEnvelopes.length,
+    wsMessages: health.wsMessages,
     newMembers: roster.isNew.length,
     roster: roster.streamers.length,
     errors: errors.length,
+    degraded,
   },
   regions: regionsPicked.map((code) => ({ code, supported: regionCodes.includes(code) })),
-  streams,
+  rounds,
+  watch: watch
+    ? {
+        requested: watchRooms.length,
+        connected: watch.connected,
+        failed: watch.failed,
+        seconds: watch.seconds,
+        envelopes: wsEnvelopes.length,
+        rateLimited: Boolean(watch.rateLimited),
+        rateLimitHits: watch.rateLimitHits ?? 0,
+        signedWithKey: Boolean(watch.signedWithKey),
+        messageTypes: Object.fromEntries(
+          Object.entries(watch.messageTypes).sort((a, b) => b[1] - a[1]).slice(0, 12),
+        ),
+      }
+    : null,
+  streams: streamList,
   chests: chestList,
   errors: [...new Set(errors)].slice(0, 10),
 };
+
+// Sözleşme kontrolü: yayınlanan dosya tüketicilerin beklediği alanları taşıyor mu?
+const contractProblems = validateSnapshot(snapshot).map((problem) => `sözleşme: ${problem}`);
+if (contractProblems.length) {
+  snapshot.errors = [...new Set([...snapshot.errors, ...contractProblems])].slice(0, 10);
+  snapshot.health.ok = false;
+  console.warn(`[arena-radar] ${contractProblems.length} sözleşme sorunu: ${contractProblems.slice(0, 3).join(" · ")}`);
+}
 
 await mkdir(OUT_DIR, { recursive: true });
 const tmp = `${OUT_FILE}.tmp`;
@@ -630,6 +960,10 @@ const rosterSnapshot = {
   newMembers: roster.isNew.slice(0, 50),
   streamers: roster.streamers,
 };
+const rosterProblems = validateRoster(rosterSnapshot);
+if (rosterProblems.length) {
+  console.warn(`[arena-radar] üye defteri sözleşmesi: ${rosterProblems.slice(0, 3).join(" · ")}`);
+}
 const rosterTmp = `${ROSTER_FILE}.tmp`;
 await writeFile(rosterTmp, `${JSON.stringify(rosterSnapshot)}\n`, "utf8");
 await rename(rosterTmp, ROSTER_FILE);
@@ -639,6 +973,9 @@ const versionPayload = {
   dataVersion: snapshot.generatedAt,
   generatedAt: snapshot.generatedAt,
   commit: process.env.GITHUB_SHA || "",
+  stale: snapshot.stale,
+  dataAgeMinutes: snapshot.dataAgeMinutes,
+  health: snapshot.health,
   stats: snapshot.stats,
   roster: { total: roster.streamers.length, today: roster.today.added },
 };
@@ -646,9 +983,15 @@ const versionTmp = `${VERSION_FILE}.tmp`;
 await writeFile(versionTmp, `${JSON.stringify(versionPayload, null, 2)}\n`, "utf8");
 await rename(versionTmp, VERSION_FILE);
 
+// Supabase (isteğe bağlı): yeni yayıncılar ve sandık geçmişi kalıcı tablolara yazılır.
+const mirrored = await mirrorToSupabase({ roster: rosterSnapshot, snapshot });
+
 console.log(
-  `[arena-radar] ${snapshot.stats.live} canlı yayın · ${snapshot.stats.chests} sandık · ` +
-    `${snapshot.stats.checked}/${snapshot.stats.candidates} aday doğrulandı · ` +
+  `[arena-radar] ${snapshot.stats.live} canlı yayın · ${snapshot.stats.chests} sandık ` +
+    `(${health.chestsWaiting} bekliyor · ${health.chestsOpen} açık · ${health.letters} mektup) · ` +
+    `${roomsScanned} oda taraması / ${rounds.length} tur · ${snapshot.stats.checked}/${snapshot.stats.candidates} aday doğrulandı · ` +
+    `WS ${health.wsRooms} oda / ${health.wsMessages} mesaj / ${health.wsEnvelopes} zarf · ` +
     `üye defteri ${rosterSnapshot.total} (bugün +${roster.today.added}) · ${snapshot.scanSeconds}s`,
 );
+if (!mirrored.skipped) console.log(`[arena-radar] Supabase: ${mirrored.streamers} yayıncı · ${mirrored.chests} sandık · ${mirrored.errors} hata`);
 for (const error of snapshot.errors) console.log(`[arena-radar] uyarı: ${error}`);

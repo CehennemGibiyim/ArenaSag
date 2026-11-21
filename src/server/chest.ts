@@ -188,7 +188,7 @@ export function chestFromEnvelope(fields: EnvelopeFields, meta: RoomMeta): {
 export async function recordChest(
   fields: EnvelopeFields,
   meta: RoomMeta,
-  source: "connector" | "demo" | "euler" | "room-info" = "connector",
+  source: "connector" | "demo" | "euler" | "room-info" | "radar" = "connector",
 ): Promise<Chest | null> {
   const parsed = chestFromEnvelope(fields, meta);
   if (!parsed) return null;

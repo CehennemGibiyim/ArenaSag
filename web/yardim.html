@@ -72,7 +72,7 @@
         <h2>3 · Tam otomatik tarama</h2>
         <p>Taramayı sen başlatmıyorsun. İki bağımsız kaynak sürekli çalışır ve sonuçları birleştirir:</p>
         <h3>GitHub Actions</h3>
-        <p><code>.github/workflows/radar.yml</code> her 5 dakikada bir çalışır. Aday yayıncıları Tik.Tools, TikWM ve bölge dizinlerinden toplar; <code>user/room</code> ve <code>check_alive</code> ile canlılığı doğrular; canlı odalar için <code>room/info</code> sandık zarfını okur; sonucu <code>web/data/arena-live.json</code> dosyasına yazar ve GitHub Pages'i yayınlar. Bilgisayarın kapalı olsa bile çalışır.</p>
+        <p><code>.github/workflows/radar.yml</code> her 10 dakikada bir çalışır. Aday yayıncıları Tik.Tools, TikWM ve bölge dizinlerinden toplar; <code>user/room</code> ve <code>check_alive</code> ile canlılığı doğrular; canlı odalar için <code>room/info</code> sandık zarfını okur; sonucu <code>web/data/arena-live.json</code> dosyasına yazar ve GitHub Pages'i yayınlar. Bilgisayarın kapalı olsa bile çalışır.</p>
         <h3>Windows yerel keşif turu</h3>
         <p>Kurulu uygulama, paket içindeki aynı tarayıcıyı kendi IP'sinden çalıştırır. Bu tur, GitHub taramasının kaçırdığı bölgesel odaları ve sandıkları yakalar; iki veri kaynağından daha yeni olanı gösterir. Ayrıca bilinen odaların <code>room/info</code> zarfı 20 saniyede bir yoklanır, böylece sandık süresi geçmeden bildirim çıkar.</p>
         <div class="steps">
@@ -115,7 +115,7 @@
         <h3>Panelde sandık sayısı 0 görünüyor, hata mı?</h3>
         <p>Hayır. Sandıklar yalnızca TikTok zarfında gerçekten göründüğünde listelenir. Tarama sürerken veya o an sandık yokken 0 kalması normaldir. Bir sonraki tur birkaç dakika içinde çalışır.</p>
         <h3>Veri ne kadar sürede yenilenir?</h3>
-        <p>GitHub taraması yaklaşık 5 dakikada bir, Windows istemcisi ham veriyi 5 saniyede bir, bilinen odaların zarfını 20 saniyede bir yoklar. Web paneli 10 saniyede bir tazelenir.</p>
+        <p>GitHub taraması yaklaşık 10 dakikada bir, Windows istemcisi ham veriyi 5 saniyede bir, bilinen odaların zarfını 20 saniyede bir yoklar. Web paneli 10 saniyede bir tazelenir.</p>
         <h3>Tam panel nerede açılır?</h3>
         <p>Statik sayfadaki yönetim ve otomasyon bağlantıları tam panele gider. Varsayılan adres <code>http://localhost:3000</code>; Windows tam kurulum paketi bu paneli başlatır. Farklı bir adres için Ayarlar → Tam panel adresi bölümünü kullan.</p>
         <h3>Jetonlar otomatik toplanıyor mu?</h3>

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { recordChest, upsertFlow, deriveChest } from "@/server/chest";
 import { bumpRoomChest, upsertLiveRoom } from "@/server/rooms";
 import { getSettings } from "@/server/settings";
+import { guardAdmin } from "@/server/api-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -44,20 +45,9 @@ type IngestBody = {
   };
 };
 
+/** Token varsa token; yoksa yalnızca yerel ağ + aynı köken (bkz. api-guard). */
 async function authorized(request: Request): Promise<boolean> {
-  let expected = "";
-  try {
-    const settings = await getSettings();
-    expected = process.env.ARENA_INGEST_TOKEN || (settings as unknown as { ingestToken?: string }).ingestToken || "";
-  } catch {
-    expected = process.env.ARENA_INGEST_TOKEN || "";
-  }
-  if (!expected) return true;
-  const provided =
-    request.headers.get("x-arena-token") ??
-    new URL(request.url).searchParams.get("token") ??
-    (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  return provided === expected;
+  return (await guardAdmin(request, { mutation: true })) === null;
 }
 
 export async function GET() {

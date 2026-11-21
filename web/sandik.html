@@ -102,7 +102,7 @@
   <div class="err" id="err"></div>
 
   <footer>
-    Veri: GitHub Actions radar taraması (yaklaşık 5 dakikada bir) + Windows istemcisinin yerel keşif turu · Jeton toplama TikTok uygulamasında yapılır, bu sayfa canlıya tek tıkla götürür.<br />
+    Veri: GitHub Actions radar taraması (yaklaşık 10 dakikada bir) + Windows istemcisinin yerel keşif turu · Jeton toplama TikTok uygulamasında yapılır, bu sayfa canlıya tek tıkla götürür.<br />
     <a href="index.html">Arena Live OS paneli</a> · <a href="yardim.html">Yardım</a> · <a href="https://github.com/CehennemGibiyim/ArenaSag">GitHub</a> ·
     <a href="https://github.com/CehennemGibiyim/ArenaSag/releases/latest/download/ArenaRadar-Setup.exe">Windows uygulaması</a> ·
     TikTok resmi API'si değildir.
@@ -184,7 +184,7 @@
     var detected = Date.parse(chest.detectedAt || "");
     var isNew = Number.isFinite(detected) && now - detected < 120000;
     if (isNew) card.className += " new";
-    var title = chest.title || (chest.kind === "bag" ? "çanta" : chest.variant || "sandık");
+    var title = chest.title || (chest.kind === "bag" ? "çanta" : chest.kind === "letter" ? "mektup" : chest.variant || "sandık");
     var opens = "";
     var opensMs = Date.parse(chest.opensAt || "");
     if (Number.isFinite(opensMs)) {
@@ -193,13 +193,14 @@
     card.innerHTML =
       '<div class="row"><div style="min-width:0"><div class="who">@' + D.escapeHtml(chest.username) + '</div>' +
       '<div class="sub">' + D.escapeHtml(title) + '</div></div>' +
-      '<div class="timer" style="color:' + timerColor(left) + '">' + (left > 0 ? D.clock(left) : "AÇIK") +
-      '<small>' + (left > 0 ? opens + " açılış" : "şimdi katıl") + '</small></div></div>' +
+      '<div class="timer" style="color:' + timerColor(left) + '">' +
+      (left > 0 ? D.clock(left) : chest.status === "closed" ? "BİTTİ" : "AÇIK") +
+      '<small>' + (left > 0 ? opens + " açılış" : chest.status === "closed" ? "odadan kalktı" : "hâlâ odada") + '</small></div></div>' +
       '<div class="metrics"><div class="m"><b>' + D.formatNumber(chest.coins) + '</b><span>Jeton</span></div>' +
       '<div class="m"><b style="color:#9df9f5">' + D.ratioOf(chest) + '</b><span>Oran</span></div>' +
       '<div class="m"><b>' + D.formatNumber(chest.slots) + '</b><span>Kontenjan</span></div></div>' +
       '<div class="foot"><span class="sub">' + D.formatNumber(chest.viewers) + ' izleyici · ' +
-      (chest.kind === "bag" ? "çanta" : chest.variant) + '</span>' +
+      (chest.kind === "bag" ? "çanta" : chest.kind === "letter" ? "mektup" : chest.variant) + '</span>' +
       '<button class="copy" title="Bağlantıyı kopyala">Kopyala</button></div>' +
       '<div class="foot"><a class="open-live" target="_blank" rel="noreferrer" href="' +
       D.escapeHtml(chest.openUrl || D.liveUrl(chest.username)) + '">Canlıya gir · jetonu topla</a></div>';

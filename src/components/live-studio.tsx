@@ -133,12 +133,13 @@ export function LiveStudio({
   }, [fetchSnapshot]);
 
   useEffect(() => {
-    void loadSessions();
-    const statusTimer = fetch("/api/live/status")
+    // İlk yükleme zamanlayıcıdan başlar; efekt gövdesinde senkron durum yazımı olmaz.
+    const first = setTimeout(() => { void loadSessions(); }, 0);
+    fetch("/api/live/status")
       .then((response) => response.json())
       .then((data) => setConnector(data.connector))
       .catch(() => null);
-    void statusTimer;
+    return () => clearTimeout(first);
   }, [loadSessions]);
 
   useEffect(() => {

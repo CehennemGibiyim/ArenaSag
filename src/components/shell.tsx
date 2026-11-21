@@ -82,12 +82,15 @@ const TITLES: Record<string, string> = {
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [openPath, setOpenPath] = useState(pathname);
   const [online, setOnline] = useState<{ available: boolean; version: string; detail: string } | null>(null);
 
-  useEffect(() => {
+  // Rota değişince çekmece kapanır. React'in "prop değişince state ayarla"
+  // deseni kullanılır; efekt içinde setState çağrısı yapılmaz.
+  if (openPath !== pathname) {
+    setOpenPath(pathname);
     setOpen(false);
-  }, [pathname]);
-
+  }
   useEffect(() => {
     if (pathname.startsWith("/overlay")) return;
     let active = true;
