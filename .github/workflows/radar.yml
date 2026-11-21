@@ -15,6 +15,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: arena-radar
@@ -124,10 +125,30 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Web kütüphanesini yükle
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: web
+          # v5 varsayılan olarak gizli dosyaları atlar; web/.nojekyll korunmalı.
+          include-hidden-files: true
+
+      # upload-pages-artifact başarılı olsa da artefakt birkaç saniye görünmeyebiliyor;
+      # deploy-pages o anda "No artifacts named github-pages" ile düşüyordu.
+      - name: Yayın paketinin görünmesini bekle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?name=github-pages" --jq '.total_count')"
+            if [ "${count:-0}" -gt 0 ]; then
+              echo "github-pages artefaktı hazır (deneme ${attempt})."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "github-pages artefaktı 60 saniye içinde görünmedi." >&2
+          exit 1
 
       - name: GitHub Pages'e yayınla
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
