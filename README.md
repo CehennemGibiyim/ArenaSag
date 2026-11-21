@@ -63,9 +63,10 @@ GitHub Actions · cron */5
   ├─ aday toplama: Tik.Tools, TikWM bölge örnekleri, yayıncı dizini, önceki odalar
   ├─ doğrulama: user/room → check_alive
   ├─ sandık zarfı: room/info → envelopeInfo / envelope_list
-  └─ web/data/arena-live.json + version.json → commit
+  └─ arena-live.json + roster.json + version.json → commit (data dalı)
                                                 ├─ GitHub Pages (web paneli)
-                                                └─ Windows Radar (5 sn'de bir ham veri)
+                                                ├─ Windows Radar (5 sn'de bir ham veri)
+                                                └─ Tam panel → PostgreSQL üye defteri
 
 Windows istemcisi · paket içindeki aynı tarayıcı
   ├─ kendi IP'sinden yerel keşif turu (varsayılan 5 dk)
@@ -78,6 +79,35 @@ Windows istemcisi · paket içindeki aynı tarayıcı
 - **Sandık bildirimi** açılıştan önce (varsayılan 180 sn pencere, oran ≥ 7) Windows balon bildirimi ve ses üretir.
 - **Değişiklik algılama** ham veri 5 saniyede bir, `version.json` 60 saniyede bir denetlenir.
 - **Otomatik jeton toplama TikTok tarafından sunulmaz.** Sistem sandığı zamanında gösterir, bildirir ve canlıya tek tıkla götürür; jetonu sen toplarsın.
+
+### Veri dalı (`data`)
+
+Tarama verisi `main` dalına yazılmaz. `arena-live.json`, `roster.json` ve `version.json`
+yalnızca `data` dalında tutulur; `main` sadece kodu taşır. Böylece günde ~288 veri
+commit'i kod geçmişini kirletmez, `git log` okunabilir kalır.
+
+- Ham veri: `https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/data/web/data/arena-live.json`
+- GitHub Pages yayını `data` dalındaki dosyaları `web/` içine ekleyerek yapılır.
+- Yerel geliştirmede `web/data/*.json` üretilir ve `.gitignore` ile ana daldan uzak tutulur.
+
+### Üye defteri — günlük yeni yayıncılar
+
+Her tarama, doğrulanan yayıncıları `roster.json` içindeki kalıcı deftere ekler.
+Defter gün geçtikçe büyür: kimse silinmez, yalnızca `lastSeen` / `lastLiveAt` tazelenir.
+
+- Gün bazında eklenen yeni yayıncı sayısı `roster.json → days[]` alanında tutulur.
+- Defter en fazla `ARENA_ROSTER_MAX` (varsayılan 20.000) yayıncı ve 90 günlük geçmiş tutar.
+- Tam panel açıkken her 30 dakikada bir defter PostgreSQL'e aktarılır
+  (`POST /api/roster/sync` ile elle de çalıştırılabilir). Yalnızca panelde olmayan
+  yayıncılar eklenir; mevcut izleyici/elmas/sandık verileri ezilmez.
+
+### Engellenmemek için
+
+- Aday ve oda istekleri 403/429/5xx durumunda `Retry-After` ve üstel geri çekilme ile yeniden denenir.
+- Her istek arasında küçük rastgele gecikme, iş başında 0-30 saniye rastgele başlangıç gecikmesi vardır.
+- Bölgeler rotasyonla örneklenir; tek IP'den aynı hedefe yüklenilmez.
+- `data` dalına yapılan düzenli commit'ler depoyu hareketli tutar, böylece GitHub 60 gün hareketsizlik
+gerekçesiyle zamanlanmış işi durdurmaz.
 
 Ayrıntılı mimari: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md)
 
@@ -103,10 +133,11 @@ Ayrıntılı mimari: [docs/GITHUB-RADAR.md](docs/GITHUB-RADAR.md)
 | **GitHub Radar** | Panel/oturum olmadan ~5 dakikada bir tarama; canlı yayınlar ve sandık zarfları JSON olarak yayınlanır |
 | **Windows Radar** | GitHub verisini 5 saniyede bir çeker; yerel keşif turu çalıştırır; sandık açılmadan bildirir |
 | **Canlı Stüdyo** | Chat, hediye, beğeni, takip olayları; hedef barı ve oturum geçmişi (tam panel) |
-| **Sandık Radarı** | Jeton ÷ kontenjan oranı, 16 hazır sekme, 9 sıralama anahtarı, QR ile telefondan katılma |
+| **Sandık Radarı** | Jeton ÷ kontenjan oranı, 12 hazır sekme, 9 sıralama anahtarı, QR ile telefondan katılma |
 | **Canlı Yayınlar** | Keşfedilen yayıncılar kalıcı; sabitleme, izleyici/sandık/en iyi oran takibi (tam panel) |
 | **Eşzamanlı tarayıcı** | Worker pool ile paralel oda dinleme; doğrulanan odalar kalıcı sıraya eklenir (tam panel) |
 | **Bölgesel keşif** | Desteklenen pazarlar dönüşümlü örneklenir; aday ve doğrulanmış oda sayıları ayrıdır |
+| **Üye defteri** | GitHub taramasının doğruladığı yayıncılar gün gün birikir; tam panel bunları PostgreSQL'e aktarır |
 | **Yerel Agent** | Kendi bilgisayarında çalışan paralel toplayıcı; sandık + jeton akışını panele yazar |
 | **Chat Botu / Uyarılar** | Tetikleyici-yanıt kuralları, hediye eşik alarmları, overlay/ses/Telegram aksiyonları |
 | **Overlay Sunucusu** | OBS için hedef barı, top gifter, sohbet, alert ve stats widget'ları |

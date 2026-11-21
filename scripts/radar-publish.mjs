@@ -19,6 +19,12 @@
  *   ARENA_STREAMERS     Ek yayıncı listesi (@a,@b)
  *   ARENA_OUT_DIR       Çıktı klasörü (varsayılan: web/data; Windows istemcisi kendi veri klasörünü verir)
  *   ARENA_OUT_FILE      Çıktı dosya adı (varsayılan: arena-live.json)
+ *   ARENA_DATA_BRANCH   Verinin yayınlandığı dal (varsayılan: data)
+ *   ARENA_ROSTER_MAX    Üye defterinde tutulacak en fazla yayıncı (varsayılan: 20000)
+ *
+ * Ayrıca `roster.json` yazar: her taramada doğrulanan yayıncıların gün gün
+ * büyüyen, kimsenin silinmediği listesi. Veri `data` dalına işlenir; `main`
+ * yalnızca kodu taşır.
  */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -41,6 +47,12 @@ const MAX_CHECKS = clamp(Number(process.env.ARENA_MAX_CHECKS || 80), 10, 160);
 const MAX_ROOMS = clamp(Number(process.env.ARENA_MAX_ROOMS || 45), 5, 120);
 const MAX_CHEST_AGE_MS = clamp(Number(process.env.ARENA_MAX_CHEST_AGE || 6), 1, 24) * 3_600_000;
 const MAX_CHESTS = 240;
+const DATA_BRANCH = process.env.ARENA_DATA_BRANCH || "data";
+const ROSTER_FILE = path.join(OUT_DIR, "roster.json");
+const ROSTER_MAX = clamp(Number(process.env.ARENA_ROSTER_MAX || 20_000), 200, 50_000);
+const ROSTER_DAY_MAX = 90;
+const MAX_ATTEMPTS = 3;
+const RETRYABLE = new Set([403, 408, 429, 500, 502, 503, 504]);
 const DEADLINE = Date.now() + 4 * 60_000;
 const NOW = Date.now();
 
@@ -84,22 +96,45 @@ function timestampSeconds(value) {
   return Math.floor(ms / 1000);
 }
 
-async function getJson(url, timeout = 9_000) {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": UA,
-      Accept: "application/json",
-      "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
-      Referer: "https://www.tiktok.com/live",
-    },
-    cache: "no-store",
-    redirect: "follow",
-    signal: AbortSignal.timeout(timeout),
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const text = await response.text();
-  if (!text) throw new Error("Boş yanıt");
-  return JSON.parse(text);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Geçici hata / hız sınırı mı? 403 ve 429 TikTok tarafında en sık görülen engel.
+function retryable(error) {
+  const status = Number(error?.status || 0);
+  if (status) return RETRYABLE.has(status);
+  return error instanceof TypeError || ["TimeoutError", "AbortError"].includes(error?.name);
+}
+
+async function getJson(url, timeout = 9_000, attempt = 1) {
+  try {
+    // Küçük jitter: aynı saniyede çok sayıda istek atıp engellenmemek için.
+    if (attempt === 1) await sleep(Math.floor(Math.random() * 120));
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": UA,
+        Accept: "application/json",
+        "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+        Referer: "https://www.tiktok.com/live",
+      },
+      cache: "no-store",
+      redirect: "follow",
+      signal: AbortSignal.timeout(timeout),
+    });
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}`);
+      error.status = response.status;
+      error.retryAfter = Number(response.headers.get("retry-after") || 0) * 1000;
+      throw error;
+    }
+    const text = await response.text();
+    if (!text) throw new Error("Boş yanıt");
+    return JSON.parse(text);
+  } catch (error) {
+    if (attempt >= MAX_ATTEMPTS || !retryable(error)) throw error;
+    const backoff = Number(error?.retryAfter || 0) || 400 * 2 ** (attempt - 1) + Math.floor(Math.random() * 300);
+    await sleep(Math.min(backoff, 8_000));
+    return getJson(url, timeout, attempt + 1);
+  }
 }
 
 async function mapLimit(items, limit, fn) {
@@ -124,6 +159,102 @@ async function readPrevious() {
   } catch {
     return { streams: [], chests: [] };
   }
+}
+
+/**
+ * Üye defterini oku: önce yerel kopya, yoksa veri dalındaki yayın.
+ * Kimse silinmez; her tarama yalnızca ekler ve son görülme zamanını tazeler.
+ */
+async function readRoster() {
+  const parse = (raw) => {
+    const data = obj(raw);
+    if (data.schema !== 1) return null;
+    return { streamers: list(data.streamers), days: obj(data.days) };
+  };
+  try {
+    const local = parse(JSON.parse(await readFile(ROSTER_FILE, "utf8")));
+    if (local) return local;
+  } catch {
+    /* ilk çalıştırma */
+  }
+  try {
+    const remote = parse(
+      await getJson(`https://raw.githubusercontent.com/${REPO}/${DATA_BRANCH}/web/data/roster.json`, 12_000),
+    );
+    if (remote) return remote;
+  } catch {
+    /* veri dalı henüz yok */
+  }
+  return { streamers: [], days: {} };
+}
+
+/** Önceki defter ile bu turun doğrulanmış yayınlarını birleştirir. */
+function mergeRoster(roster, streams) {
+  const nowIso = new Date(NOW).toISOString();
+  const seen = new Map();
+  const isNew = [];
+
+  for (const row of roster.streamers) {
+    const username = handle(row.username);
+    if (!username) continue;
+    seen.set(username, {
+      username,
+      nickname: str(row.nickname, 80) || username,
+      avatar: str(row.avatar, 500),
+      region: regionCode(row.region),
+      roomId: roomKey(row.roomId),
+      firstSeen: str(row.firstSeen, 30) || nowIso,
+      lastSeen: str(row.lastSeen, 30) || nowIso,
+      lastLiveAt: str(row.lastLiveAt, 30),
+      liveCount: integer(row.liveCount),
+    });
+  }
+
+  for (const stream of streams) {
+    const username = handle(stream.username);
+    if (!username) continue;
+    const previousRow = seen.get(username);
+    const next = {
+      username,
+      nickname: str(stream.nickname, 80) || previousRow?.nickname || username,
+      avatar: str(stream.avatar, 500) || previousRow?.avatar || "",
+      region: regionCode(stream.region) || previousRow?.region || "",
+      roomId: roomKey(stream.roomId) || previousRow?.roomId || "",
+      firstSeen: previousRow?.firstSeen || nowIso,
+      lastSeen: nowIso,
+      lastLiveAt: nowIso,
+      liveCount: (previousRow?.liveCount || 0) + (stream.stale ? 0 : 1),
+    };
+    if (!previousRow) isNew.push(username);
+    seen.set(username, next);
+  }
+
+  const streamers = [...seen.values()]
+    .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
+    .slice(0, ROSTER_MAX);
+
+  const day = new Date(NOW).toISOString().slice(0, 10);
+  const days = { ...roster.days };
+  const current = obj(days[day]);
+  days[day] = {
+    added: (integer(current.added) || 0) + isNew.length,
+    total: streamers.length,
+    streams: streams.length,
+  };
+  const keptDays = Object.keys(days)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, ROSTER_DAY_MAX)
+    .reduce((acc, key) => {
+      acc[key] = days[key];
+      return acc;
+    }, {});
+
+  return {
+    isNew,
+    streamers,
+    days: keptDays,
+    today: { date: day, added: integer(obj(keptDays[day]).added), total: streamers.length },
+  };
 }
 
 function addCandidate(map, entry) {
@@ -308,6 +439,7 @@ async function roomInfo(roomId) {
 
 const errors = [];
 const previous = await readPrevious();
+const previousRoster = await readRoster();
 const candidates = new Map();
 
 // 1) Önceki taramanın canlı odaları — oda kimlikleri korunur, tekrar arama gerekmez.
@@ -407,6 +539,9 @@ for (const old of previous.streams) {
   }
 }
 
+// Üye defteri: doğrulanmış yayıncılar gün gün birikir, hiçbiri silinmez.
+const roster = mergeRoster(previousRoster, streams);
+
 const chests = new Map();
 const knownChest = new Map(
   previous.chests
@@ -468,6 +603,8 @@ const snapshot = {
     checked: found.length,
     live: streams.length,
     chests: chestList.length,
+    newMembers: roster.isNew.length,
+    roster: roster.streamers.length,
     errors: errors.length,
   },
   regions: regionsPicked.map((code) => ({ code, supported: regionCodes.includes(code) })),
@@ -480,12 +617,30 @@ await mkdir(OUT_DIR, { recursive: true });
 const tmp = `${OUT_FILE}.tmp`;
 await writeFile(tmp, `${JSON.stringify(snapshot, null, 0)}\n`, "utf8");
 await rename(tmp, OUT_FILE);
+const rosterSnapshot = {
+  schema: 1,
+  source: "github-radar",
+  repo: REPO,
+  updatedAt: snapshot.generatedAt,
+  total: roster.streamers.length,
+  today: roster.today,
+  days: Object.entries(roster.days)
+    .map(([date, value]) => ({ date, added: integer(obj(value).added), total: integer(obj(value).total) }))
+    .sort((a, b) => b.date.localeCompare(a.date)),
+  newMembers: roster.isNew.slice(0, 50),
+  streamers: roster.streamers,
+};
+const rosterTmp = `${ROSTER_FILE}.tmp`;
+await writeFile(rosterTmp, `${JSON.stringify(rosterSnapshot)}\n`, "utf8");
+await rename(rosterTmp, ROSTER_FILE);
+
 const versionPayload = {
   schema: 1,
   dataVersion: snapshot.generatedAt,
   generatedAt: snapshot.generatedAt,
   commit: process.env.GITHUB_SHA || "",
   stats: snapshot.stats,
+  roster: { total: roster.streamers.length, today: roster.today.added },
 };
 const versionTmp = `${VERSION_FILE}.tmp`;
 await writeFile(versionTmp, `${JSON.stringify(versionPayload, null, 2)}\n`, "utf8");
@@ -493,6 +648,7 @@ await rename(versionTmp, VERSION_FILE);
 
 console.log(
   `[arena-radar] ${snapshot.stats.live} canlı yayın · ${snapshot.stats.chests} sandık · ` +
-    `${snapshot.stats.checked}/${snapshot.stats.candidates} aday doğrulandı · ${snapshot.scanSeconds}s`,
+    `${snapshot.stats.checked}/${snapshot.stats.candidates} aday doğrulandı · ` +
+    `üye defteri ${rosterSnapshot.total} (bugün +${roster.today.added}) · ${snapshot.scanSeconds}s`,
 );
 for (const error of snapshot.errors) console.log(`[arena-radar] uyarı: ${error}`);

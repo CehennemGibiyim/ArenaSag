@@ -34,7 +34,10 @@ jobs:
         node-version: '22.x'
 
     - name: Install dependencies
-      run: npm install
+      run: npm ci
+
+    - name: Birim testleri (sandık kuralları)
+      run: npm run test:unit
 
     - name: PostgreSQL scheduler smoke test
       env:

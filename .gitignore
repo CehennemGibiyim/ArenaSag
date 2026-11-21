@@ -12,7 +12,11 @@ release/
 .env.local
 *.log
 logs/
+# Radar verisi `data` dalında tutulur; ana dalda yalnızca kod bulunur.
 web/data/*.tmp
+web/data/arena-live.json
+web/data/version.json
+web/data/roster.json
 
 # İşletim sistemi
 .DS_Store

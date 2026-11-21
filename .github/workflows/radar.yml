@@ -20,11 +20,14 @@ concurrency:
   group: arena-radar
   cancel-in-progress: false
 
+env:
+  DATA_BRANCH: data
+
 jobs:
   scan:
     runs-on: ubuntu-latest
     outputs:
-      changed: ${{ steps.commit.outputs.changed }}
+      changed: ${{ steps.publish.outputs.changed }}
     steps:
       - name: Depoyu al
         uses: actions/checkout@v4
@@ -34,24 +37,58 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Veri dalını hazırla
+        run: |
+          set -euo pipefail
+          mkdir -p web/data
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$DATA_BRANCH"
+            for name in arena-live.json roster.json version.json; do
+              git show "FETCH_HEAD:web/data/$name" > "web/data/$name" 2>/dev/null || rm -f "web/data/$name"
+            done
+            echo "Önceki veri $DATA_BRANCH dalından alındı."
+          else
+            echo "Veri dalı henüz yok; ilk tarama oluşturacak."
+          fi
+
       - name: Canlı yayın ve sandık taraması
         env:
           ARENA_MAX_CHECKS: "80"
           ARENA_MAX_ROOMS: "45"
-        run: node scripts/radar-publish.mjs
-
-      - name: Veriyi depoya işle
-        id: commit
+          ARENA_DATA_BRANCH: ${{ env.DATA_BRANCH }}
         run: |
+          # Dakika başında aynı saniyeye yüklenmemek için kısa rastgele gecikme.
+          sleep $((RANDOM % 30))
+          node scripts/radar-publish.mjs
+
+      - name: Veriyi veri dalına işle
+        id: publish
+        run: |
+          set -euo pipefail
+          staged="$(mktemp -d)"
+          for name in arena-live.json roster.json version.json; do
+            if [ -f "web/data/$name" ]; then cp "web/data/$name" "$staged/$name"; fi
+          done
           git config user.name "arena-radar[bot]"
           git config user.email "arena-radar@users.noreply.github.com"
-          git add web/data/arena-live.json web/data/version.json
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$DATA_BRANCH"
+            git checkout -B "$DATA_BRANCH" FETCH_HEAD
+          else
+            git checkout --orphan "$DATA_BRANCH"
+            git rm -r --cached . >/dev/null 2>&1 || true
+          fi
+          mkdir -p web/data
+          for name in arena-live.json roster.json version.json; do
+            if [ -f "$staged/$name" ]; then cp "$staged/$name" "web/data/$name"; fi
+          done
+          git add -A web/data
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Veri değişmedi."
           else
             git commit -m "chore(radar): canlı tarama verisi $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git push
+            git push origin "$DATA_BRANCH"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -68,8 +105,17 @@ jobs:
     steps:
       - name: Depoyu al
         uses: actions/checkout@v4
-        with:
-          ref: main
+
+      - name: Veriyi yayına ekle
+        run: |
+          set -euo pipefail
+          mkdir -p web/data
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$DATA_BRANCH"
+            for name in arena-live.json roster.json version.json; do
+              git show "FETCH_HEAD:web/data/$name" > "web/data/$name" 2>/dev/null || rm -f "web/data/$name"
+            done
+          fi
 
       - name: Pages'i hazırla
         uses: actions/configure-pages@v5

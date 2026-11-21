@@ -28,6 +28,18 @@ jobs:
       - name: Depoyu al
         uses: actions/checkout@v4
 
+      - name: Radar verisini ekle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p web/data
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch --depth=1 origin data
+            for name in arena-live.json roster.json version.json; do
+              git show "FETCH_HEAD:web/data/$name" > "web/data/$name" 2>/dev/null || rm -f "web/data/$name"
+            done
+          fi
+
       - name: Node.js 22
         uses: actions/setup-node@v4
         with:

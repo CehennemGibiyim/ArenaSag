@@ -23,6 +23,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { ratioOf, secondsLeft, shouldAlert } from "./alert-rules.mjs";
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(APP_DIR);
@@ -45,7 +46,7 @@ const UPDATE_DIR = path.join(STATE_DIR, "updates");
 const DEFAULTS = {
   repo: "CehennemGibiyim/ArenaSag",
   dataUrls: [
-    "https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/main/web/data/arena-live.json",
+    "https://raw.githubusercontent.com/CehennemGibiyim/ArenaSag/data/web/data/arena-live.json",
     "https://cehennemgibiyim.github.io/ArenaSag/data/arena-live.json",
   ],
   pagesUrl: "https://cehennemgibiyim.github.io/ArenaSag/",
@@ -218,17 +219,6 @@ async function getJson(url, timeout = 9000) {
   return response.json();
 }
 
-function secondsLeft(chest) {
-  const opens = Date.parse(chest && chest.opensAt ? chest.opensAt : "");
-  return Number.isFinite(opens) ? Math.round((opens - Date.now()) / 1000) : 0;
-}
-
-function ratioOf(chest) {
-  const value = Number(chest && chest.ratio);
-  if (Number.isFinite(value) && value > 0) return value;
-  return Math.round((Number(chest && chest.coins ? chest.coins : 0) / Math.max(1, Number(chest && chest.slots ? chest.slots : 1))) * 100) / 100;
-}
-
 function notifyDesktop(title, message) {
   if (!config.notifyDesktop) return;
   const script = path.join(APP_DIR, "notify.ps1");
@@ -255,10 +245,12 @@ function processChests(chests, options = {}) {
     if (!id || alerted.has(id)) continue;
     alerted.add(id);
     if (options.seedOnly) continue;
-    const left = secondsLeft(chest);
-    const ratio = ratioOf(chest);
-    const inWindow = left > -30 && (options.immediate ? true : left <= Number(config.alertSeconds || 180));
-    if (ratio >= Number(config.alertRatio || 7) && inWindow) {
+    const notify = shouldAlert(chest, {
+      alertRatio: config.alertRatio,
+      alertSeconds: config.alertSeconds,
+      immediate: options.immediate === true,
+    });
+    if (notify) {
       raiseAlert(chest);
       fresh += 1;
     }

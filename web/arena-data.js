@@ -13,7 +13,8 @@
   "use strict";
 
   var REPO = "CehennemGibiyim/ArenaSag";
-  var RAW = "https://raw.githubusercontent.com/" + REPO + "/main/web/data/arena-live.json";
+  var DATA_BRANCH = "data";
+  var RAW = "https://raw.githubusercontent.com/" + REPO + "/" + DATA_BRANCH + "/web/data/arena-live.json";
   var RELEASES = "https://github.com/" + REPO + "/releases/latest";
   var INSTALLER = RELEASES + "/download/ArenaRadar-Setup.exe";
 
