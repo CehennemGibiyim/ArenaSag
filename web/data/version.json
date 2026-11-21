@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "dataVersion": "2026-11-21T05:53:02.910Z",
+  "generatedAt": "2026-11-21T05:53:02.910Z",
+  "commit": "",
+  "stats": {
+    "candidates": 69,
+    "checked": 10,
+    "live": 3,
+    "chests": 0,
+    "newMembers": 3,
+    "roster": 3,
+    "errors": 3
+  },
+  "roster": {
+    "total": 3,
+    "today": 3
+  }
+}
