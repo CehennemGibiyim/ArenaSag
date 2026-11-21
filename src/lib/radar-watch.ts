@@ -19,10 +19,12 @@ export type RadarWatch = {
   messageTypes: Record<string, number>;
 };
 
-/** `/api/radar/watch` yanıtı; panel yalnızca bu üç alanı gösterir. */
+/** `/api/radar/watch` yanıtı; panel yalnızca bu alanları gösterir. */
 export type RadarWatchSnapshot = {
   watch: RadarWatch | null;
   warnings: string[];
+  /** Yayınlanan anlık görüntünün üretildiği an; yaş hesabı buradan yapılır. */
+  generatedAt: string | null;
   /** Anlık görüntü okunamazsa neden; başarılı okumada boş. */
   error?: string;
 };
@@ -49,6 +51,12 @@ export function readWatch(value: unknown): RadarWatch | null {
     signedWithKey: row.signedWithKey === true,
     messageTypes,
   };
+}
+
+/** `generatedAt` alanını ISO metnine indirger; eksik veya geçersizse `null`. */
+export function readGeneratedAt(value: unknown): string | null {
+  const ms = Date.parse(String(value ?? ""));
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
 /** `warnings` alanını boş satırlardan arındırıp panelde gösterilecek son 5 satıra indirir. */

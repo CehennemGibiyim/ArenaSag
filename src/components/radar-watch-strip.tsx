@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Radar as RadarIcon } from "lucide-react";
 import type { RadarWatch, RadarWatchSnapshot } from "@/lib/radar-watch";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, timeAgo } from "@/lib/format";
 
 // Yayın kadansı 10 dakika; 5 dakikalık yoklama taze kalırken yayın başına en
 // fazla birkaç istek üretir. Sekmeye dönüşte ayrıca beklemeden tazelenir.
@@ -23,8 +23,16 @@ function quotaOf(watch: RadarWatch) {
  * `watch`/`warnings` alanlarından okur; veritabanı senkronunu beklemez. Hem
  * sandık radarı sekmesinde hem radar sayfasında aynı bileşen kullanılır.
  */
-export function RadarWatchStrip({ className = "" }: { className?: string }) {
+export function RadarWatchStrip({ className = "", compact = false }: { className?: string; compact?: boolean }) {
   const [state, setState] = useState<RadarWatchSnapshot | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Yaş etiketi dakikada bir tazelenir; aksi hâlde 5 dakikalık yoklamaya kadar
+  // "az önce" yazısı donuk kalırdı.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +48,7 @@ export function RadarWatchStrip({ className = "" }: { className?: string }) {
         setState((previous) => ({
           watch: previous?.watch ?? null,
           warnings: previous?.warnings ?? [],
+          generatedAt: previous?.generatedAt ?? null,
           error: error instanceof Error ? error.message : "radar verisi alınamadı",
         }));
       }
@@ -62,6 +71,54 @@ export function RadarWatchStrip({ className = "" }: { className?: string }) {
 
   const watch = state?.watch ?? null;
   const quota = watch ? quotaOf(watch) : null;
+  const generatedAt = state?.generatedAt ?? null;
+  const generatedMs = generatedAt ? Date.parse(generatedAt) : NaN;
+  // Yayın kadansı 10 dakika; 20 dakikayı geçen yaş bayat sayılır.
+  const ageStale = Number.isFinite(generatedMs) && now - generatedMs > 20 * 60_000;
+  const age = generatedAt ? (
+    <span
+      className={ageStale ? "text-amber-200/80" : "text-white/35"}
+      title={`Son radar senkronu: ${new Date(generatedAt).toLocaleString("tr-TR")}`}
+    >
+      son tarama {timeAgo(generatedAt)}
+    </span>
+  ) : null;
+
+  // Mini radar penceresi dar: tek satır sayı + ilk uyarı, aynı veriden.
+  if (compact) {
+    return (
+      <div className={`rounded-lg border border-white/[0.09] bg-white/[0.03] px-2 py-1 ${className}`.trim()}>
+        <div className="flex items-center justify-between gap-2 text-[9.5px] tabular-nums">
+          <span className="inline-flex items-center gap-1 font-bold uppercase tracking-[0.12em] text-white/35">
+            <RadarIcon size={10} className="text-cyan-200/70" /> WS zarf
+          </span>
+          {watch ? (
+            <span className="text-white/55">
+              <b className="text-white">{watch.connected}/{watch.requested}</b> oda ·{" "}
+              <b className="text-white">{formatNumber(watch.envelopes)}</b> zarf
+              {quota ? (
+                <>
+                  {" · "}
+                  <span className={quota.tone}>{quota.label}</span>
+                </>
+              ) : null}
+              {age ? <> · {age}</> : null}
+            </span>
+          ) : (
+            <span className={state?.error ? "text-pink-200" : "text-white/40"}>
+              {!state ? "okunuyor" : state.error ? "alınamadı" : "kayıt yok"}
+            </span>
+          )}
+        </div>
+        {state?.warnings[0] ? (
+          <p className="mt-0.5 truncate text-[9px] text-amber-200/80" title={state.warnings.join(" · ")}>
+            {state.warnings[0]}
+          </p>
+        ) : null}
+        {state?.error ? <p className="mt-0.5 truncate text-[9px] text-pink-200">{state.error}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <div className={`panel px-3.5 py-3 ${className}`.trim()}>
@@ -79,6 +136,7 @@ export function RadarWatchStrip({ className = "" }: { className?: string }) {
                 <span className={quota.tone}>{quota.label}</span>
               </>
             ) : null}
+            {age ? <> · {age}</> : null}
           </span>
         ) : (
           <span className={state?.error ? "text-[11px] text-pink-200" : "text-[11px] text-white/40"}>

@@ -1,4 +1,4 @@
-import { readWarnings, readWatch, type RadarWatchSnapshot } from "@/lib/radar-watch";
+import { readGeneratedAt, readWarnings, readWatch, type RadarWatchSnapshot } from "@/lib/radar-watch";
 import { bumpRoomChest, upsertLiveRoom } from "@/server/rooms";
 import { deriveChest, recordChest } from "@/server/chest";
 import { sendNotification } from "@/server/notify";
@@ -48,6 +48,7 @@ type RadarChest = {
 type RadarPayload = {
   schema?: number;
   stale?: boolean;
+  generatedAt?: unknown;
   streams?: RadarStream[];
   chests?: RadarChest[];
   watch?: unknown;
@@ -99,9 +100,10 @@ export async function readRadarWatch(url = radarSnapshotUrl()): Promise<RadarWat
     return {
       watch: readWatch(payload.watch),
       warnings: readWarnings(payload.warnings),
+      generatedAt: readGeneratedAt(payload.generatedAt),
     };
   } catch (error) {
-    return { watch: null, warnings: [], error: (error as Error).message };
+    return { watch: null, warnings: [], generatedAt: null, error: (error as Error).message };
   }
 }
 
