@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/server/api-guard";
-import { lastRadarSync, radarSnapshotUrl, syncRadar } from "@/server/radar-sync";
+import { radarSnapshotUrl, syncRadar } from "@/server/radar-sync";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json({ ok: true, url: radarSnapshotUrl(), last: lastRadarSync() });
+  return NextResponse.json({ ok: true, url: radarSnapshotUrl() });
 }
 
 export async function POST(request: Request) {

@@ -18,6 +18,9 @@ const SOURCE = "github-radar";
 const MAX_STREAMS = 120;
 const MAX_CHESTS = 240;
 const INTERVAL_MS = 10 * 60_000;
+// Panel sekmeleri arasında tek upstream isteği: yayın kadansı 10 dk; 60 sn'lik
+// süreç içi önbellek tazeliği bozmadan GitHub'a giden isteği seyreltir.
+const WATCH_CACHE_MS = 60_000;
 
 type RadarStream = {
   username?: string;
@@ -68,35 +71,43 @@ export type RadarSyncResult = {
 
 const state = globalThis as typeof globalThis & {
   __arenaRadarSyncTimer?: ReturnType<typeof setTimeout | typeof setInterval>;
-  __arenaRadarLast?: RadarSyncResult | null;
   __arenaRadarStale?: boolean;
+  __arenaRadarWatch?: { url: string; at: number; snapshot: RadarWatchSnapshot };
+  __arenaRadarWatchPending?: { url: string; promise: Promise<RadarWatchSnapshot> };
 };
 
 export function radarSnapshotUrl() {
   return `https://raw.githubusercontent.com/${REPO}/${DATA_BRANCH}/web/data/arena-live.json`;
 }
 
-export function lastRadarSync(): RadarSyncResult | null {
-  return state.__arenaRadarLast ?? null;
+type RadarFetchOptions = {
+  userAgent: string;
+  timeout?: number;
+  /** Sync akışı stream listesini şart koşar; watch için yalnızca zarf alanları yeter. */
+  requireStreams?: boolean;
+};
+
+/** Tek yerde ağ isteği + şema kontrolü: sync ve watch aynı ayrıştırmayı kullanır. */
+async function fetchRadarPayload(
+  url: string,
+  { userAgent, timeout = 10_000, requireStreams = false }: RadarFetchOptions,
+): Promise<RadarPayload> {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: { Accept: "application/json", "User-Agent": userAgent },
+    signal: AbortSignal.timeout(timeout),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const payload = (await response.json()) as RadarPayload;
+  if (payload?.schema !== 1 || (requireStreams && !Array.isArray(payload.streams))) {
+    throw new Error("Radar verisi biçimi tanınmadı");
+  }
+  return payload;
 }
 
-/**
- * Yayınlanan `arena-live.json`'dan yalnızca WS dinleme durumunu okur.
- * Veritabanına yazmaz; panel senkronun ilk turunu beklemeden durumu gösterir.
- *
- * Yanıt 2 dakika veri önbelleğinde tutulur: açık her panel sekmesi ayrı GitHub
- * isteği atmasın, ama yayın kadansının (10 dk) çok altında kalınsın.
- */
-export async function readRadarWatch(url = radarSnapshotUrl()): Promise<RadarWatchSnapshot> {
+async function loadRadarWatch(url: string): Promise<RadarWatchSnapshot> {
   try {
-    const response = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "ArenaPanel/radar-watch" },
-      signal: AbortSignal.timeout(10_000),
-      next: { revalidate: 120 },
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = (await response.json()) as RadarPayload;
-    if (payload.schema !== 1) throw new Error("Radar verisi biçimi tanınmadı");
+    const payload = await fetchRadarPayload(url, { userAgent: "ArenaPanel/radar-watch" });
     return {
       watch: readWatch(payload.watch),
       warnings: readWarnings(payload.warnings),
@@ -107,25 +118,44 @@ export async function readRadarWatch(url = radarSnapshotUrl()): Promise<RadarWat
   }
 }
 
+/**
+ * Yayınlanan `arena-live.json`'dan yalnızca WS dinleme durumunu okur.
+ * Veritabanına yazmaz; panel senkronun ilk turunu beklemeden durumu gösterir.
+ *
+ * Başarılı yanıt 60 saniye süreç içi önbellekte tutulur ve eşzamanlı sekmeler
+ * aynı isteği paylaşır; her sekme GitHub'a ayrı istek atmaz. Hata önbelleğe
+ * alınmaz ki GitHub toparlanınca panel hemen yeni durumu görsün.
+ */
+export async function readRadarWatch(url = radarSnapshotUrl()): Promise<RadarWatchSnapshot> {
+  const cached = state.__arenaRadarWatch;
+  if (cached && cached.url === url && Date.now() - cached.at < WATCH_CACHE_MS) return cached.snapshot;
+  if (state.__arenaRadarWatchPending?.url === url) return state.__arenaRadarWatchPending.promise;
+  const promise = loadRadarWatch(url)
+    .then((snapshot) => {
+      if (!snapshot.error) state.__arenaRadarWatch = { url, at: Date.now(), snapshot };
+      return snapshot;
+    })
+    .finally(() => {
+      if (state.__arenaRadarWatchPending?.promise === promise) state.__arenaRadarWatchPending = undefined;
+    });
+  state.__arenaRadarWatchPending = { url, promise };
+  return promise;
+}
+
 const handle = (value: unknown) => String(value ?? "").replace(/^@+/, "").trim().toLowerCase();
 
 export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResult> {
   const syncedAt = new Date().toISOString();
   try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: { Accept: "application/json", "User-Agent": "ArenaPanel/radar-sync" },
-      signal: AbortSignal.timeout(15_000),
+    const payload = await fetchRadarPayload(url, {
+      userAgent: "ArenaPanel/radar-sync",
+      timeout: 15_000,
+      requireStreams: true,
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = (await response.json()) as RadarPayload;
-    if (payload.schema !== 1 || !Array.isArray(payload.streams)) {
-      throw new Error("Radar verisi biçimi tanınmadı");
-    }
 
     // Bütün anlık görüntü bayatsa hiçbir oda "şu an canlı" sayılmamalı.
     const snapshotStale = payload.stale === true;
-    const streams = payload.streams.slice(0, MAX_STREAMS);
+    const streams = (payload.streams ?? []).slice(0, MAX_STREAMS);
     let rooms = 0;
     let live = 0;
     for (const stream of streams) {
@@ -194,7 +224,7 @@ export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResu
     }
     if (!snapshotStale) state.__arenaRadarStale = false;
 
-    state.__arenaRadarLast = {
+    return {
       ok: true,
       fetched: streams.length,
       rooms,
@@ -203,9 +233,8 @@ export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResu
       stale: snapshotStale,
       syncedAt,
     };
-    return state.__arenaRadarLast;
   } catch (error) {
-    state.__arenaRadarLast = {
+    return {
       ok: false,
       fetched: 0,
       rooms: 0,
@@ -215,7 +244,6 @@ export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResu
       syncedAt,
       error: (error as Error).message,
     };
-    return state.__arenaRadarLast;
   }
 }
 
