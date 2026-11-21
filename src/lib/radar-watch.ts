@@ -16,7 +16,7 @@ export type RadarWatch = {
   signedWithKey: boolean;
 };
 
-/** Panelin `/api/radar/sync` yanıtından okuduğu özet. */
+/** Panelin `/api/radar/watch` (ve senkron sonucu) yanıtından okuduğu özet. */
 export type RadarWatchState = {
   watch: RadarWatch | null;
   warnings: string[];

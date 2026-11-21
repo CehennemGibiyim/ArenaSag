@@ -2,6 +2,7 @@ import Link from "next/link";
 import { RadarConsole } from "@/components/radar-console";
 import { Network } from "lucide-react";
 import { LiveChestFeed } from "@/components/live-chest-feed";
+import { RadarWatchStrip } from "@/components/radar-watch-strip";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default function RadarPage() {
           </>
         }
       />
+      <RadarWatchStrip className="mb-4" />
       <LiveChestFeed />
       <RadarConsole />
     </div>

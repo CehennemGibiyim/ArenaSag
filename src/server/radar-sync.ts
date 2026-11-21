@@ -107,6 +107,49 @@ export function lastRadarSync(): RadarSyncResult | null {
   return state.__arenaRadarLast ?? null;
 }
 
+/** Panelli doğrudan `arena-live.json`'dan okuyan uç için özet. */
+export type RadarWatchSnapshot = {
+  ok: boolean;
+  watch: RadarWatch | null;
+  warnings: string[];
+  generatedAt: string | null;
+  stale: boolean;
+  error?: string;
+};
+
+/**
+ * Yayınlanan `arena-live.json`'dan yalnızca WS dinleme durumunu okur.
+ * Veritabanına yazmaz; panel senkronun ilk turunu beklemeden durumu gösterir.
+ */
+export async function readRadarWatch(url = radarSnapshotUrl()): Promise<RadarWatchSnapshot> {
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: { Accept: "application/json", "User-Agent": "ArenaPanel/radar-watch" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = (await response.json()) as RadarPayload;
+    if (payload.schema !== 1) throw new Error("Radar verisi biçimi tanınmadı");
+    return {
+      ok: true,
+      watch: readWatch(payload.watch),
+      warnings: readWarnings(payload.warnings),
+      generatedAt: typeof payload.generatedAt === "string" ? payload.generatedAt : null,
+      stale: payload.stale === true,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      watch: null,
+      warnings: [],
+      generatedAt: null,
+      stale: false,
+      error: (error as Error).message,
+    };
+  }
+}
+
 const handle = (value: unknown) => String(value ?? "").replace(/^@+/, "").trim().toLowerCase();
 
 export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResult> {
