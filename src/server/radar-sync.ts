@@ -1,4 +1,4 @@
-import type { RadarWatch } from "@/lib/radar-watch";
+import { readWarnings, readWatch, type RadarWatchSnapshot } from "@/lib/radar-watch";
 import { bumpRoomChest, upsertLiveRoom } from "@/server/rooms";
 import { deriveChest, recordChest } from "@/server/chest";
 import { sendNotification } from "@/server/notify";
@@ -47,11 +47,10 @@ type RadarChest = {
 
 type RadarPayload = {
   schema?: number;
-  generatedAt?: string;
   stale?: boolean;
   streams?: RadarStream[];
   chests?: RadarChest[];
-  watch?: Partial<RadarWatch> | null;
+  watch?: unknown;
   warnings?: unknown;
 };
 
@@ -64,34 +63,7 @@ export type RadarSyncResult = {
   stale: boolean;
   syncedAt: string;
   error?: string;
-  // WebSocket zarf dinlemesi; panel sandık radarı sekmesinde gösterir.
-  watch: RadarWatch | null;
-  warnings: string[];
 };
-
-/** `watch` alanını eksik/bozuk değerlere karşı güvenli sayılara indirger. */
-function readWatch(value: unknown): RadarWatch | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Partial<RadarWatch>;
-  return {
-    requested: Number(row.requested ?? 0) || 0,
-    connected: Number(row.connected ?? 0) || 0,
-    failed: Number(row.failed ?? 0) || 0,
-    seconds: Number(row.seconds ?? 0) || 0,
-    envelopes: Number(row.envelopes ?? 0) || 0,
-    rateLimited: row.rateLimited === true,
-    rateLimitHits: Number(row.rateLimitHits ?? 0) || 0,
-    signedWithKey: row.signedWithKey === true,
-  };
-}
-
-function readWarnings(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((line) => String(line ?? "").trim())
-    .filter(Boolean)
-    .slice(0, 5);
-}
 
 const state = globalThis as typeof globalThis & {
   __arenaRadarSyncTimer?: ReturnType<typeof setTimeout | typeof setInterval>;
@@ -107,46 +79,29 @@ export function lastRadarSync(): RadarSyncResult | null {
   return state.__arenaRadarLast ?? null;
 }
 
-/** Panelli doğrudan `arena-live.json`'dan okuyan uç için özet. */
-export type RadarWatchSnapshot = {
-  ok: boolean;
-  watch: RadarWatch | null;
-  warnings: string[];
-  generatedAt: string | null;
-  stale: boolean;
-  error?: string;
-};
-
 /**
  * Yayınlanan `arena-live.json`'dan yalnızca WS dinleme durumunu okur.
  * Veritabanına yazmaz; panel senkronun ilk turunu beklemeden durumu gösterir.
+ *
+ * Yanıt 2 dakika veri önbelleğinde tutulur: açık her panel sekmesi ayrı GitHub
+ * isteği atmasın, ama yayın kadansının (10 dk) çok altında kalınsın.
  */
 export async function readRadarWatch(url = radarSnapshotUrl()): Promise<RadarWatchSnapshot> {
   try {
     const response = await fetch(url, {
-      cache: "no-store",
       headers: { Accept: "application/json", "User-Agent": "ArenaPanel/radar-watch" },
       signal: AbortSignal.timeout(10_000),
+      next: { revalidate: 120 },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = (await response.json()) as RadarPayload;
     if (payload.schema !== 1) throw new Error("Radar verisi biçimi tanınmadı");
     return {
-      ok: true,
       watch: readWatch(payload.watch),
       warnings: readWarnings(payload.warnings),
-      generatedAt: typeof payload.generatedAt === "string" ? payload.generatedAt : null,
-      stale: payload.stale === true,
     };
   } catch (error) {
-    return {
-      ok: false,
-      watch: null,
-      warnings: [],
-      generatedAt: null,
-      stale: false,
-      error: (error as Error).message,
-    };
+    return { watch: null, warnings: [], error: (error as Error).message };
   }
 }
 
@@ -245,8 +200,6 @@ export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResu
       chests,
       stale: snapshotStale,
       syncedAt,
-      watch: readWatch(payload.watch),
-      warnings: readWarnings(payload.warnings),
     };
     return state.__arenaRadarLast;
   } catch (error) {
@@ -259,8 +212,6 @@ export async function syncRadar(url = radarSnapshotUrl()): Promise<RadarSyncResu
       stale: false,
       syncedAt,
       error: (error as Error).message,
-      watch: null,
-      warnings: [],
     };
     return state.__arenaRadarLast;
   }
