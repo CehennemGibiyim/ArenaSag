@@ -71,6 +71,8 @@ jobs:
           done
           git config user.name "arena-radar[bot]"
           git config user.email "arena-radar@users.noreply.github.com"
+          # .gitignore veriyi ana dalda yasaklar; dal değişiminden önce temizle
+          rm -f web/data/*.json
           if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
             git fetch --depth=1 origin "$DATA_BRANCH"
             git checkout -B "$DATA_BRANCH" FETCH_HEAD
@@ -82,7 +84,8 @@ jobs:
           for name in arena-live.json roster.json version.json; do
             if [ -f "$staged/$name" ]; then cp "$staged/$name" "web/data/$name"; fi
           done
-          git add -A web/data
+          # -f: veri dalında .gitignore geçerli olsa da dosyalar izlenmeli
+          git add -f web/data
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Veri değişmedi."
