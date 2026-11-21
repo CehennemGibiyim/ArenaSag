@@ -15,6 +15,12 @@ export type RadarWatch = {
   rateLimited: boolean;
   rateLimitHits: number;
   signedWithKey: boolean;
+  /** Kota beklemesinin bittiği an; panel yeniden denemeyi buradan geri sayar. */
+  cooldownUntil: string | null;
+  /** Son bekleme penceresinin süresi (sn). */
+  cooldownSeconds: number;
+  /** Tur boyunca kaç kez kota beklemesi yapıldı. */
+  cooldownWaits: number;
   /** Yakalanan WS mesaj türleri; sözleşme bu alanı da doğrular. */
   messageTypes: Record<string, number>;
 };
@@ -40,6 +46,7 @@ export function readWatch(value: unknown): RadarWatch | null {
       if (hits > 0) messageTypes[type] = hits;
     }
   }
+  const cooldownMs = Date.parse(String(row.cooldownUntil ?? ""));
   return {
     requested: Number(row.requested ?? 0) || 0,
     connected: Number(row.connected ?? 0) || 0,
@@ -49,6 +56,9 @@ export function readWatch(value: unknown): RadarWatch | null {
     rateLimited: row.rateLimited === true,
     rateLimitHits: Number(row.rateLimitHits ?? 0) || 0,
     signedWithKey: row.signedWithKey === true,
+    cooldownUntil: Number.isFinite(cooldownMs) ? new Date(cooldownMs).toISOString() : null,
+    cooldownSeconds: Number(row.cooldownSeconds ?? 0) || 0,
+    cooldownWaits: Number(row.cooldownWaits ?? 0) || 0,
     messageTypes,
   };
 }

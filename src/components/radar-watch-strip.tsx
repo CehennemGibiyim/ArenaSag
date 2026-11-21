@@ -9,11 +9,32 @@ import { formatNumber, timeAgo } from "@/lib/format";
 // fazla birkaç istek üretir. Sekmeye dönüşte ayrıca beklemeden tazelenir.
 const REFRESH_MS = 5 * 60_000;
 
-/** Kota etiketi ve rengi tek yerde: metin ile renk ayrışmasın. */
-function quotaOf(watch: RadarWatch) {
-  if (watch.rateLimited) return { label: "imzalama kotası doldu", tone: "text-pink-200" };
-  if (watch.signedWithKey) return { label: "anahtarlı imza", tone: "text-emerald-200" };
-  return { label: "ücretsiz imza", tone: "text-amber-200" };
+/**
+ * Kota etiketi ve rengi tek yerde. Bekleme sürerken "kota doldu" denmez:
+ * yeniden deneme anı geri sayılır, süre dolunca beklemenin bittiği söylenir.
+ */
+function quotaOf(watch: RadarWatch, now: number) {
+  const untilMs = watch.cooldownUntil ? Date.parse(watch.cooldownUntil) : NaN;
+  const left = Number.isFinite(untilMs) ? Math.max(0, Math.ceil((untilMs - now) / 1000)) : null;
+  if (left !== null && left > 0) {
+    return {
+      label: `kota beklemesi · yeniden deneme ${left} sn`,
+      compact: `yeniden deneme ${left} sn`,
+      tone: watch.rateLimited ? "text-pink-200" : "text-amber-200",
+    };
+  }
+  if (watch.rateLimited) {
+    return { label: "kota doldu · yeniden deneme yok", compact: "kota doldu", tone: "text-pink-200" };
+  }
+  if (watch.cooldownWaits > 0) {
+    return {
+      label: `ücretsiz imza · ${watch.cooldownWaits} kez kota beklendi, yeniden denendi (${watch.cooldownSeconds} sn)`,
+      compact: `${watch.cooldownWaits} kez kota beklemesi`,
+      tone: "text-amber-200",
+    };
+  }
+  if (watch.signedWithKey) return { label: "anahtarlı imza", compact: "anahtarlı imza", tone: "text-emerald-200" };
+  return { label: "ücretsiz imza", compact: "ücretsiz imza", tone: "text-amber-200" };
 }
 
 /**
@@ -33,6 +54,13 @@ export function RadarWatchStrip({ className = "", compact = false }: { className
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Kota beklemesi sürerken geri sayım saniye saniye güncellenir.
+  useEffect(() => {
+    if (!state?.watch?.cooldownUntil) return;
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [state?.watch?.cooldownUntil]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +98,7 @@ export function RadarWatchStrip({ className = "", compact = false }: { className
   }, []);
 
   const watch = state?.watch ?? null;
-  const quota = watch ? quotaOf(watch) : null;
+  const quota = watch ? quotaOf(watch, now) : null;
   const generatedAt = state?.generatedAt ?? null;
   const generatedMs = generatedAt ? Date.parse(generatedAt) : NaN;
   // Yayın kadansı 10 dakika; 20 dakikayı geçen yaş bayat sayılır.
@@ -99,7 +127,9 @@ export function RadarWatchStrip({ className = "", compact = false }: { className
               {quota ? (
                 <>
                   {" · "}
-                  <span className={quota.tone}>{quota.label}</span>
+                  <span className={quota.tone} title={quota.label}>
+                    {quota.compact}
+                  </span>
                 </>
               ) : null}
               {age ? <> · {age}</> : null}
