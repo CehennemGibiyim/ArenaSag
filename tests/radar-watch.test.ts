@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { readGeneratedAt, readWarnings, readWatch } from "../src/lib/radar-watch";
 import { readRadarWatch } from "../src/server/radar-sync";
@@ -6,21 +6,17 @@ import { readRadarWatch } from "../src/server/radar-sync";
 const SNAPSHOT_URL = "https://example.test/web/data/arena-live.json";
 
 const jsonResponse = (payload: unknown, status = 200) =>
-  new Response(JSON.stringify(payload), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
+  new Response(JSON.stringify(payload), { status });
 
 async function withFetch(
   impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
   run: () => Promise<void>,
 ) {
-  const original = globalThis.fetch;
-  globalThis.fetch = impl as typeof fetch;
+  const mocked = mock.method(globalThis, "fetch", impl);
   try {
     await run();
   } finally {
-    globalThis.fetch = original;
+    mocked.mock.restore();
   }
 }
 
@@ -104,7 +100,6 @@ test("uyarılar boş satırlardan arınır ve 5 satırda kesilir", () => {
     "altıncı",
   ]);
   assert.deepEqual(warnings, ["birinci", "5", "ikinci", "üçüncü", "dördüncü"]);
-  assert.equal(warnings.length, 5);
 });
 
 test("radar-sync yayındaki watch/warnings/generatedAt alanlarını okur", async () => {
