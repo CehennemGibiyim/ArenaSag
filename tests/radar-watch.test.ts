@@ -154,6 +154,40 @@ test("başarılı watch yanıtı önbellekten okunur, ardışık sekmeler tek is
   );
 });
 
+test("60 saniyelik watch önbelleği süre dolunca düşer", async () => {
+  const url = `${SNAPSHOT_URL}?ttl=60`;
+  let calls = 0;
+  let now = Date.parse("2026-01-01T12:00:00.000Z");
+  const clock = mock.method(Date, "now", () => now);
+  try {
+    await withFetch(
+      async () => {
+        calls += 1;
+        return jsonResponse({ schema: 1, watch: { connected: calls }, warnings: [] });
+      },
+      async () => {
+        const first = await readRadarWatch(url);
+        assert.equal(first.watch?.connected, 1);
+        assert.equal(calls, 1);
+
+        // Süre dolmadan önceki okuma önbellekten gelir.
+        now += 59_999;
+        const cached = await readRadarWatch(url);
+        assert.equal(cached.watch?.connected, 1);
+        assert.equal(calls, 1);
+
+        // Tam 60 saniyede önbellek düşer ve yeniden GitHub'a gidilir.
+        now += 1;
+        const refreshed = await readRadarWatch(url);
+        assert.equal(refreshed.watch?.connected, 2);
+        assert.equal(calls, 2);
+      },
+    );
+  } finally {
+    clock.mock.restore();
+  }
+});
+
 test("eşzamanlı watch istekleri tek upstream isteğini paylaşır", async () => {
   const url = `${SNAPSHOT_URL}?cache=2`;
   let calls = 0;
