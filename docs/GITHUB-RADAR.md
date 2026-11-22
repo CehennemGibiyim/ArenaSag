@@ -74,7 +74,9 @@ GitHub Actions (cron */5)
   oda), `failed`, `seconds` (dinleme süresi), `envelopes` (yakalanan zarf),
   `roomInfoEnvelopeRooms` (yalnızca bağlantı anındaki oda verisinden zarf çıkan oda),
   `rateLimited`/`rateLimitHits` (imzalama kotası), `signedWithKey` (`EULER_API_KEY`
-  kullanıldı mı), `messageTypes` (çözülen protokol mesajları). Matris modunda
+  kullanıldı mı), `messageTypes` (çözülen protokol mesajları). Her koşunun oda
+  bazlı deneme/bağlantı/429/zarf sayaçları `watch.roomHistory` içinde taşınır;
+  bunlar `roomMemory` olarak önceki yayınla birleştirilir. Matris modunda
   `shardCoverage` her shard için `attempted`, `connectedRooms` ve
   `roomInfoEnvelopeRooms` taşır; `health.wsShardCoverage` aynı dizidir.
   Kota beklemesi de görünürdür: `cooldownUntil` (yeniden deneme anı, ISO),
@@ -82,7 +84,10 @@ GitHub Actions (cron */5)
   Panel "kota doldu" demek yerine bu andan geri sayar; süre bitince beklemenin
   tamamlandığını yazar. `health.wsRooms/wsRequested/wsEnvelopes/wsMessages/wsSignedWithKey/wsRateLimited`
   ve `health.wsCooldownUntil/wsCooldownSeconds/wsCooldownWaits` aynı sayıların kısa
-  hâlidir; tam kayıt `watch` nesnesidir.
+  hâlidir; tam kayıt `watch` nesnesidir. `health.wsRoomMemory` hatırlanan oda sayısıdır.
+- `roomMemory`, oda kimliğine göre `attempts`, `connected`, `failed`, `rateLimitHits`,
+  `envelopes` ve son deneme/bağlantı/429/zarf zamanlarını taşır. 45 günden eski
+  kayıtlar budanır, en fazla 600 oda tutulur; sonraki shard seçimi bu geçmişi kullanır.
 - Dinleyici odaya bağlanır bağlanmaz oda bilgisindeki (`room/info`) açık zarf
   alanlarını da okur; odaya girmeden önce açılmış sandık/mektup/çanta akışı
   beklemeden listeye girer. Bu okuma imzalama kotası harcamaz, altı saatten eski
@@ -96,10 +101,21 @@ GitHub Actions (cron */5)
 - Zarf şeması sürüklenmesi de `warnings` alanına düşer: bilinen tipler
   (`ENVELOPE_MESSAGE_TYPES`: `WebcastEnvelopeMessage`, `WebcastGoodyBagMessage`) dışında
   adı zarf ailesine benzeyen yeni bir tip görülürse **örnek mesaj tipi ve sayısıyla**
-  uyarı üretilir. 24 saat boyunca hiç zarf/çanta tipi gelmezse de uyarı verilir; son
-  görülen örnek tip `health.envelopeSampleType` alanında taşınır.
-- `health.envelopeLastSeenAt`, `health.envelopeTrackingSince` ve
-  `health.unknownEnvelopeTypes` şema takibinin yayınlar arası kaydıdır; ilk çalıştırma
+  uyarı üretilir. Bilinmeyen tipin maskeli ham karesi shard artifact'ındaki
+  `watch.unknownSamples` altında, alan yolları ise `health.unknownEnvelopeSamples`
+  içinde tutulur; `radar-schema` issue'su bu alan listesiyle açılır/güncellenir.
+  Kimlikler, kullanıcı alanları ve URL'ler maskelenir.
+- Her zarf tipi için ayrı son görülme anı ve gözlenen görülme aralığı tutulur.
+  Sessizlik eşiği tipin kadansına göre **ortalama aralığın 3 katı** olarak hesaplanır;
+  çok sık tipte gürültüyü önlemek için en az 30 dakika, çok seyrek tipte erken alarmı
+  önlemek için en fazla 24 saat uygulanır. Kadans henüz gözlenmediyse 24 saatlik taban
+  yalnızca ilk kurulum için kullanılır. Bir tip susarken başka bir zarf tipi akıyorsa
+  uyarı `Başka zarf tipi akıyor: …` işaretiyle ayrıca belirtilir.
+- `health.envelopeTypeActivity` tip başına `lastSeenAt`, `firstSeenAt`, `meanGapMs`,
+  `gapCount`, `thresholdMs`, `silent` ve `silentWhileOtherFlows` alanlarını taşır.
+  `health.envelopeSilentTypes` ve `health.envelopeSilentWhileOtherFlows` özet listelerdir.
+  `health.envelopeLastSeenAt`, `health.envelopeTrackingSince`, `health.envelopeSampleType`
+  ve `health.unknownEnvelopeTypes` geriye dönük uyumluluk için korunur; ilk çalıştırma
   `envelopeTrackingSince` tabanını kurar.
 
 ## Veri sözleşmesi
@@ -117,7 +133,7 @@ Tek dosya kontrolü: `node scripts/radar-contract.mjs web/data/arena-live.json`
 
 Her tarama zaman damgalarını tazelediği için dosya hep farklı görünür. `scripts/data-changed.mjs`
 canlı oda kümesi, sandık kümesi, üye defteri toplamı ve zarf şeması imzasını
-(şema sürüklenmesi/24 saat sessizlik uyarıları + `health.unknownEnvelopeTypes`)
+(şema sürüklenmesi/tip başına sessizlik uyarıları + `health.unknownEnvelopeTypes`)
 karşılaştırır; bunlardan biri değiştiğinde (ya da yayındaki veri 20 dakikayı geçtiğinde)
 commit ve Pages deploy'u yapılır. Kota sayaçları gibi her turda değişen uyarı satırları
 imzaya girmez. Böylece şema sürüklenmesi uyarısı, oda/sandık listesi değişmese bile panele ulaşır.
@@ -136,12 +152,19 @@ Pages yayını beklenmez. Adres yalnızca Actions secret'ından okunur, dosyaya 
 | Secret | Açıklama |
 | --- | --- |
 | `ARENA_TELEGRAM_BOT_TOKEN` + `ARENA_TELEGRAM_CHAT_ID` | Telegram bot bildirimi (ikisi birlikte gerekir) |
-| `ARENA_DISCORD_WEBHOOK_URL` | Discord kanal webhook'u (Telegram tanımlıysa kullanılmaz) |
+| `ARENA_DISCORD_WEBHOOK_URL` | Discord kanal webhook'u; Telegram başarısız olursa yedek kanal |
 
 Spam koruması: aynı `envelopeId` bir kez bildirilir (önceki yayındaki sandıklar ve koşu içi
 kayıtlar), koşu başına en fazla 4 mesaj gider, mesajlar arasında 1,5 sn beklenir, açılışı
-geçmiş zarf gönderilmez. Kanal tanımlı değilse koşu log'una tek satır "bildirim kapalı" yazılır.
+geçmiş zarf gönderilmez. Geçici hata (ağ, 408/429/5xx) aynı kanalda iki kez yeniden denenir;
+kalıcı hata veya tükenen denemelerde sıradaki kanal yedek olarak kullanılır. Kanal tanımlı
+değilse koşu log'una tek satır "bildirim kapalı" yazılır ve panel uyarısı üretilir.
 Bildirim hatası taramayı düşürmez; hata metni token/adres içerseydi maskelenir.
+
+Teslimat sayaçları (`sent`, `failed`, `retries`, `fallbackSent`, kanal bazlı `sent/failed` ve
+`lastError`) shard artifact'ından `version.json → health.notifications` alanına taşınır.
+Başarısız teslimat veya yedek kanal kullanımı `warnings` içinde de görünür; web radar şeridi
+ve Windows Radar paneli bu uyarıyı gösterir, böylece sessiz kayıp olmaz.
 
 ```bash
 # Yerel deneme: adresi komut geçmişine yazmadan oku, sonra taramayı çalıştır.
@@ -191,9 +214,11 @@ radar.yml
 ```
 
 - Oda listesi önceki yayından alınır; shard'lar birbirini beklemez. Oda seçimi
-  `scripts/envelope-shards.mjs → shardRooms` (ücretsiz modda izleyiciye göre ilk
-  `15 × 4 = 60`, anahtarlı modda `30 × 4 = 120` oda sırayla bölünür; aynı oda iki
-  runner'da kota harcamaz).
+  `scripts/envelope-shards.mjs → shardRooms` (ücretsiz modda `15 × 4 = 60`,
+  anahtarlı modda `30 × 4 = 120` oda kapasitesi; aynı oda iki runner'da kota
+  harcamaz). Önceki `roomMemory` varsa odalar bağlantı başarısına, 429 oranına ve
+  zarf getirisine göre sıralanır; eşit puanda izleyici sırası korunur. Hafıza yoksa
+  seçim eskisi gibi izleyici sırasıyla yapılır.
 - Bağlantı anında connector'ın `fetchRoomInfoOnConnect` ile getirdiği oda verisi
   okunur; ayrı bir `fetchRoomInfo` isteği yapılmaz. Ücretsiz imzalama kotası
   bağlantı sayısını sınırlar: aynı 12 odada tam pencere 4 oda bağlarken kısa
@@ -204,8 +229,9 @@ radar.yml
   varsayılan olarak `0`dır (tüm tur); pozitif değer bağlantıyı erken kapatır,
   fakat kısa bağlantı ek oda bağlamadığı için üretimde kullanılmaz.
 - Shard `arena-live.json` yazmaz, git'e dokunmaz. Birleştirme (`mergeShardWatches`)
-  sayaçları toplar, zarfları kimliğe göre tekilleştirir; `signedWithKey` ancak tüm
-  shard'lar anahtarlıysa true olur.
+  sayaçları ve oda geçmişini toplar, zarfları kimliğe göre tekilleştirir;
+  `signedWithKey` ancak tüm shard'lar anahtarlıysa true olur. Birleşik oda
+  geçmişi `radar-publish.mjs` tarafından `roomMemory` olarak yayınlanır.
 - Artifact yoksa yayın durmaz; `warnings` alanına "matris dinleme artifact'ı
   bulunamadı" satırı düşer.
 - Ayarlar: ücretsiz modda `--rooms 15`, anahtarlı modda `--rooms 30`;

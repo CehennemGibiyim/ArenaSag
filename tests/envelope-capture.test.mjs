@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createEnvelopeCapture, maskEnvelopePayload, writeEnvelopeFixture } from "../scripts/envelope-capture.mjs";
+import {
+  createEnvelopeCapture,
+  envelopeFieldPaths,
+  maskEnvelopePayload,
+  unknownEnvelopeSample,
+  writeEnvelopeFixture,
+} from "../scripts/envelope-capture.mjs";
 import { envelopeReward, watchEnvelopes } from "../scripts/envelope-watch.mjs";
 
 const capturedAt = new Date("2026-11-21T22:00:00.000Z");
@@ -43,6 +49,21 @@ test("ham kare maskelenir, sayısal alanlar korunur", () => {
   assert.equal(fixture.payload.envelopeInfo.peopleCount, 9);
   assert.ok(fixture.payload.envelopeInfo.unpackAt > Math.floor(Date.now() / 1000));
   assert.equal(fixture.payload.envelopeInfo.sendUserAvatar.urlList.length, 0);
+});
+
+test("bilinmeyen zarf örneği maskelenir ve alan yolları raporlanır", () => {
+  const sample = unknownEnvelopeSample(rawFrame(), {
+    method: "WebcastEnvelopeMessageV9",
+    capturedAt,
+  });
+  assert.equal(sample.type, "WebcastEnvelopeMessageV9");
+  assert.ok(sample.fields.includes("envelopeInfo.diamondCount"));
+  assert.ok(sample.fields.includes("envelopeInfo.sendUserName"));
+  assert.ok(sample.fields.includes("common.method"));
+  assert.ok(!JSON.stringify(sample).includes("gercek_kullanici"));
+  assert.ok(!JSON.stringify(sample).includes("example.com"));
+  assert.equal(sample.sample.envelopeInfo.diamondCount, 77);
+  assert.ok(envelopeFieldPaths({ a: 1, b: { c: 2 } }).includes("b.c"));
 });
 
 test("maskeli kare replay parser'ından geçer", () => {

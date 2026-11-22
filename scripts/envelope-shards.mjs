@@ -15,6 +15,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { mergeRoomMemory, roomPriority } from "./room-memory.mjs";
 
 const list = (value) => (Array.isArray(value) ? value : []);
 const obj = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
@@ -29,24 +30,38 @@ const integer = (value) => {
  * Havuz, izleyiciye göre sıralı listenin ilk `rooms * shards` kaydıdır; kayıtlar
  * sırayla shard'lara dağıtılır. Ücretsiz kotada 4 × 15 = 60, anahtarlı modda
  * 4 × 30 = 120 oda dinlenir; aynı oda iki runner'da kota harcamaz.
+ *
+ * `memory` verilirse havuz önce oda başarı/zarf geçmişine göre sıralanır; eşit
+ * puanda eski (izleyici) sıra korunur. Hafıza yoksa davranış tamamen eskisiyle
+ * aynıdır.
  */
-export function shardRooms(streams, { shard = 0, shards = 1, rooms = 0 } = {}) {
+export function shardRooms(streams, { shard = 0, shards = 1, rooms = 0, memory = {}, now = Date.now() } = {}) {
   const total = Math.max(1, Math.round(Number(shards) || 1));
   const index = Math.min(total - 1, Math.max(0, Math.round(Number(shard) || 0)));
   const perShard = Math.max(0, Math.round(Number(rooms) || 0));
+  const hasMemory = Object.keys(obj(memory)).length > 0;
   const pool = [];
   const seen = new Set();
   for (const row of list(streams)) {
     const roomId = String(obj(row).roomId ?? "").trim();
     if (!roomId || seen.has(roomId) || obj(row).stale === true) continue;
     seen.add(roomId);
-    pool.push(row);
-    if (perShard > 0 && pool.length >= perShard * total) break;
+    pool.push({ row, index: pool.length });
+    if (!hasMemory && perShard > 0 && pool.length >= perShard * total) break;
   }
-  return pool
+  let ranked = pool;
+  if (hasMemory) {
+    const scores = new Map(pool.map(({ row }) => [row.roomId, roomPriority(memory[row.roomId], now)]));
+    ranked = pool.slice().sort((a, b) => {
+      const score = scores.get(b.row.roomId) - scores.get(a.row.roomId);
+      return score || a.index - b.index;
+    });
+  }
+  return ranked
+    .slice(0, perShard > 0 ? perShard * total : undefined)
     .filter((_, position) => position % total === index)
     .slice(0, perShard > 0 ? perShard : undefined)
-    .map((row) => ({
+    .map(({ row }) => ({
       roomId: String(row.roomId),
       username: String(row.username ?? "").replace(/^@+/, "").toLowerCase(),
       nickname: String(row.nickname ?? ""),
@@ -77,6 +92,8 @@ export function mergeShardWatches(results) {
     connectedRooms: 0,
     attempted: 0,
     roomInfoEnvelopeRooms: 0,
+    roomHistory: {},
+    unknownSamples: {},
     failed: 0,
     seconds: 0,
     rateLimited: false,
@@ -92,6 +109,14 @@ export function mergeShardWatches(results) {
   const cooldownUntilMs = [];
   for (const row of rows) {
     const watch = obj(obj(row).watch);
+    merged.roomHistory = mergeRoomMemory(merged.roomHistory, watch.roomHistory, {
+      now: Date.now(),
+      maxAgeMs: Number.POSITIVE_INFINITY,
+      limit: 10_000,
+    });
+    for (const [type, sample] of Object.entries(obj(watch.unknownSamples))) {
+      if (type && !merged.unknownSamples[type] && obj(sample).sample) merged.unknownSamples[type] = sample;
+    }
     merged.requested += integer(watch.requested);
     merged.connected += integer(watch.connected);
     merged.connectedRooms += integer(watch.connectedRooms);

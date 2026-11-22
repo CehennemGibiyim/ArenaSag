@@ -57,7 +57,13 @@ const snapshot = await readFile(from, "utf8")
   .then((text) => JSON.parse(text))
   .catch(() => null);
 if (!snapshot) log(`uyarı: ${from} okunamadı; dinlenecek oda yok (birleştirme yine çalışır)`);
-const rooms = shardRooms(snapshot?.streams, { shard, shards, rooms: roomLimit });
+const rooms = shardRooms(snapshot?.streams, {
+  shard,
+  shards,
+  rooms: roomLimit,
+  // Önceki yayındaki oda başarı/429/zarf geçmişi bu turun sırasını belirler.
+  memory: snapshot?.roomMemory,
+});
 
 // Önceki yayında bildirilmiş sandıklar tekrar bildirilmez; koşu başına sınır
 // ve kanal seçimi radar-notify içinde.
@@ -104,6 +110,8 @@ const empty = {
   connected: 0,
   connectedRooms: 0,
   attempted: 0,
+  roomHistory: {},
+  unknownSamples: {},
   failed: 0,
   seconds: 0,
   rateLimited: false,
@@ -128,6 +136,8 @@ const payload = {
   commit: process.env.GITHUB_SHA || "",
   rooms,
   watch,
+  // Bildirim teslimatı da artifact'a girer; scan sağlık/uyarı alanına taşır.
+  notifications: notified,
 };
 await mkdir(path.dirname(out), { recursive: true });
 await writeFile(out, `${JSON.stringify(payload)}\n`, "utf8");

@@ -7,7 +7,9 @@ import { applyChestReward, BUSINESS_LABELS, variantOf } from "../scripts/chest-r
 // Gerçek TikTok Webcast karesinden alınmış, kimlikleri maskelenmiş fixture.
 // Kaynak ve maskeleme listesi dosyanın `source` alanında; ağa çıkmadan çalışır.
 const fixture = JSON.parse(await readFile(new URL("./fixtures/webcast-envelope-message.json", import.meta.url), "utf8"));
-const NOW = Date.UTC(2026, 10, 21, 22, 0, 0);
+// Sabit tarih, parser'ın 6 saatlik tazelik penceresini bir süre sonra aşıyordu;
+// fixture'ı gerçek "şimdi"ye taşıyarak testi zamandan bağımsız tut.
+const NOW = Date.now();
 // Beklentiler fixture'ın kendisinden türetilir: yeni bir canlı kareyle
 // değiştirildiğinde test koin/kişi/kimlik değerlerine takılmaz.
 const envelope = fixture.payload.envelopeInfo;

@@ -246,6 +246,26 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      - name: Zarf şeması sürüklenmesini issue'ya taşı
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body="$(node scripts/schema-drift-report.mjs)"
+          if [ -z "$body" ]; then
+            echo "Bilinmeyen zarf tipi yok; şema issue'suna dokunulmadı."
+            exit 0
+          fi
+          gh label create radar-schema --color 5319E7 --description "Zarf şeması sürüklenmesi" >/dev/null 2>&1 || true
+          number="$(gh issue list --label radar-schema --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body "$body"
+          else
+            gh issue create --title "Zarf şeması sürüklenmesi: bilinmeyen tip" --body "$body" --label radar-schema
+          fi
+
       - name: Önceki uyarı kaydını kapat
         if: success()
         env:

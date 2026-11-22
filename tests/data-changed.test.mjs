@@ -62,6 +62,26 @@ test("zarf şeması uyarısı yayın tetikler", () => {
   assert.equal(result.reason, "uyari-degisti");
 });
 
+test("tip sessizliği uyarısı yayın tetikler", () => {
+  const next = arena({
+    warnings: [
+      "Zarf tipi sessiz: WebcastEnvelopeMessage (son görülme 2026-01-02 11:20 UTC, gözlenen aralık ~10 dk, eşik 30 dk). Başka zarf tipi akıyor: WebcastGoodyBagMessage.",
+    ],
+  });
+  const result = decideChange({ prevArena: arena(), nextArena: next, prevRoster: roster(5), nextRoster: roster(5), now });
+  assert.equal(result.changed, true);
+  assert.equal(result.reason, "uyari-degisti");
+});
+
+test("bildirim teslimat uyarısı yayın tetikler", () => {
+  const next = arena({
+    warnings: ["Zarf bildirimi teslim edilemedi (1 mesaj, 3 deneme). Son hata: discord: HTTP 503"],
+  });
+  const result = decideChange({ prevArena: arena(), nextArena: next, prevRoster: roster(5), nextRoster: roster(5), now });
+  assert.equal(result.changed, true);
+  assert.equal(result.reason, "uyari-degisti");
+});
+
 test("bayat veri değişiklik olmasa da tazelenir", () => {
   const result = decideChange({
     prevArena: arena({ generatedAt: new Date(now - MAX_AGE_MS - 1).toISOString() }),

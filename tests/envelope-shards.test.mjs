@@ -45,6 +45,20 @@ test("60 oda 4 shard'a üst üste binmeden dağıtılır", () => {
   assert.equal(slices[1][0].username, "yayin1");
 });
 
+test("shard seçimi oda hafızasındaki getiriyi ve güvenilirliği öne alır", () => {
+  const rows = [
+    { roomId: "730000000000000101", username: "guvenilir", viewers: 1 },
+    { roomId: "730000000000000102", username: "kota", viewers: 900 },
+    { roomId: "730000000000000103", username: "yeni", viewers: 500 },
+  ];
+  const memory = {
+    "730000000000000101": { attempts: 4, connected: 4, envelopes: 3, lastAttemptAt: new Date().toISOString() },
+    "730000000000000102": { attempts: 4, connected: 1, rateLimitHits: 3, lastAttemptAt: new Date().toISOString() },
+  };
+  const selected = shardRooms(rows, { shard: 0, shards: 1, rooms: 2, memory });
+  assert.deepEqual(selected.map((room) => room.username), ["guvenilir", "yeni"]);
+});
+
 test("bayat ve tekrarlı odalar ile @ işareti temizlenir", () => {
   const rows = [
     ...streams(6),
@@ -61,7 +75,12 @@ test("bayat ve tekrarlı odalar ile @ işareti temizlenir", () => {
 
 test("shard sonuçları tek watch kaydında birleşir", () => {
   const merged = mergeShardWatches([
-    { watch: watch({ envelopes: [{ envelopeId: "a", coins: 10 }] }) },
+    {
+      watch: watch({
+        envelopes: [{ envelopeId: "a", coins: 10 }],
+        roomHistory: { "730000000000000001": { attempts: 1, connected: 1, envelopes: 1 } },
+      }),
+    },
     {
       watch: watch({
         signedWithKey: true,
@@ -69,6 +88,8 @@ test("shard sonuçları tek watch kaydında birleşir", () => {
         rateLimitHits: 2,
         messageTypes: { WebcastEnvelopeMessage: 3, WebcastChatMessage: 2 },
         envelopes: [{ envelopeId: "a", coins: 10 }, { envelopeId: "b", coins: 20 }],
+        roomHistory: { "730000000000000001": { attempts: 2, connected: 2, envelopes: 1 } },
+        unknownSamples: { WebcastEnvelopeMessageV9: { fields: ["envelopeInfo.yeniAlan"], sample: { common: {} } } },
       }),
     },
   ]);
@@ -86,6 +107,8 @@ test("shard sonuçları tek watch kaydında birleşir", () => {
   assert.equal(merged.messageTypes.WebcastEnvelopeMessage, 4);
   assert.equal(merged.messageTypes.WebcastChatMessage, 2);
   assert.equal(merged.shards, 2);
+  assert.equal(merged.roomHistory["730000000000000001"].attempts, 3);
+  assert.equal(merged.unknownSamples.WebcastEnvelopeMessageV9.fields[0], "envelopeInfo.yeniAlan");
   assert.equal(mergeShardWatches([]), null);
 });
 

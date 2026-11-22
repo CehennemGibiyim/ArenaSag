@@ -104,7 +104,7 @@ test("kota dolduğunda dinlemenin durduğu açıkça söylenir", () => {
   );
 });
 
-test("şema takibi önceki yayından devam eder, ilk tur taban kurar", () => {
+test("şema takibi tip başına son görülme ve kadansı yayınlar arasında taşır", () => {
   const now = Date.parse("2026-01-02T12:00:00.000Z");
   const previous = {
     envelopeTrackingSince: new Date(now - 30 * 3_600_000).toISOString(),
@@ -116,16 +116,112 @@ test("şema takibi önceki yayından devam eder, ilk tur taban kurar", () => {
   assert.equal(quiet.lastSeenAt, previous.envelopeLastSeenAt);
   assert.equal(quiet.sampleType, "WebcastEnvelopeMessage");
   assert.equal(quiet.unknown.length, 0);
+  assert.equal(quiet.typeActivity.WebcastEnvelopeMessage.lastSeenAt, previous.envelopeLastSeenAt);
 
   const seen = envelopeSchemaState({ WebcastEnvelopeMessageV2: 1 }, previous, now);
   assert.equal(seen.lastSeenAt, new Date(now).toISOString());
   assert.equal(seen.sampleType, "WebcastEnvelopeMessageV2");
   assert.deepEqual(seen.unknown.map((row) => row.type), ["WebcastEnvelopeMessageV2"]);
+  assert.equal(seen.typeActivity.WebcastEnvelopeMessage.lastSeenAt, previous.envelopeLastSeenAt);
+  assert.equal(seen.typeActivity.WebcastEnvelopeMessageV2.lastSeenAt, new Date(now).toISOString());
 
   const first = envelopeSchemaState({}, {}, now);
   assert.equal(first.trackingSince, new Date(now).toISOString());
   assert.equal(first.lastSeenAt, null);
   assert.equal(first.sampleType, null);
+  assert.deepEqual(first.typeActivity, {});
+});
+
+test("ardışık turlar tipin görülme kadansını öğrenir", () => {
+  const now = Date.parse("2026-01-02T12:00:00.000Z");
+  const first = envelopeSchemaState({ WebcastEnvelopeMessage: 1 }, {}, now - 10 * 60_000);
+  const second = envelopeSchemaState(
+    { WebcastEnvelopeMessage: 2 },
+    { envelopeTrackingSince: first.trackingSince, envelopeTypeActivity: first.typeActivity },
+    now,
+  );
+  assert.equal(second.typeActivity.WebcastEnvelopeMessage.meanGapMs, 10 * 60_000);
+  assert.equal(second.typeActivity.WebcastEnvelopeMessage.gapCount, 1);
+  assert.equal(second.typeActivity.WebcastEnvelopeMessage.thresholdMs, 30 * 60_000);
+  assert.equal(second.typeActivity.WebcastEnvelopeMessage.seenRuns, 2);
+});
+
+test("şema durumu sessiz tipi kadans eşiği ve akan diğer tiple işaretler", () => {
+  const now = Date.parse("2026-01-02T12:00:00.000Z");
+  const state = envelopeSchemaState(
+    { WebcastGoodyBagMessage: 2 },
+    {
+      envelopeTrackingSince: new Date(now - 2 * 3_600_000).toISOString(),
+      envelopeTypeActivity: {
+        WebcastEnvelopeMessage: {
+          lastSeenAt: new Date(now - 40 * 60_000).toISOString(),
+          firstSeenAt: new Date(now - 2 * 3_600_000).toISOString(),
+          meanGapMs: 10 * 60_000,
+          gapCount: 5,
+          seenRuns: 6,
+        },
+      },
+    },
+    now,
+  );
+  assert.equal(state.typeActivity.WebcastEnvelopeMessage.thresholdMs, 30 * 60_000);
+  assert.equal(state.typeActivity.WebcastEnvelopeMessage.silent, true);
+  assert.equal(state.typeActivity.WebcastEnvelopeMessage.silentWhileOtherFlows, true);
+  assert.deepEqual(state.silentWhileOtherFlows, ["WebcastEnvelopeMessage"]);
+  assert.deepEqual(state.flowingTypes, ["WebcastGoodyBagMessage"]);
+});
+
+test("tip sessizliği gözlenen kadansa göre uyarlanır, akan diğer tip işaretlenir", () => {
+  const now = Date.parse("2026-01-02T12:00:00.000Z");
+  const activity = {
+    WebcastEnvelopeMessage: {
+      lastSeenAt: new Date(now - 40 * 60_000).toISOString(),
+      meanGapMs: 10 * 60_000,
+      gapCount: 5,
+    },
+    WebcastGoodyBagMessage: {
+      lastSeenAt: new Date(now - 2 * 60_000).toISOString(),
+      meanGapMs: 10 * 60_000,
+      gapCount: 5,
+    },
+  };
+  const warnings = envelopeWarnings(
+    baseWatch({ messageTypes: { WebcastGoodyBagMessage: 1 } }),
+    { rooms: 60, typeActivity: activity, flowingTypes: ["WebcastGoodyBagMessage"], now },
+  );
+  const silence = warnings.find((line) => line.includes("Zarf tipi sessiz: WebcastEnvelopeMessage"));
+  assert.ok(silence, warnings.join(" | "));
+  assert.match(silence, /son görülme 2026-01-02 11:20 UTC/);
+  assert.match(silence, /eşik 30 dk/);
+  assert.match(silence, /Başka zarf tipi akıyor: WebcastGoodyBagMessage/);
+
+  // Seyrek tip: 6 saatte bir görülüyorsa 7 saatlik boşluk erken alarm değildir.
+  const sparse = envelopeWarnings(
+    baseWatch({ messageTypes: { WebcastGoodyBagMessage: 1 } }),
+    {
+      rooms: 60,
+      typeActivity: {
+        WebcastEnvelopeMessage: {
+          lastSeenAt: new Date(now - 7 * 3_600_000).toISOString(),
+          meanGapMs: 6 * 3_600_000,
+          gapCount: 4,
+        },
+      },
+      flowingTypes: ["WebcastGoodyBagMessage"],
+      now,
+    },
+  );
+  assert.equal(sparse.length, 0, sparse.join(" | "));
+});
+
+test("hiç kadans yoksa taban sessizlik uyarısı görünür kalır", () => {
+  const now = Date.parse("2026-01-02T12:00:00.000Z");
+  const warnings = envelopeWarnings(baseWatch(), {
+    rooms: 60,
+    trackingSince: new Date(now - 25 * 3_600_000).toISOString(),
+    now,
+  });
+  assert.ok(warnings.some((line) => line.includes("Zarf tipi sessiz") && line.includes("taban 24 saat")), warnings.join(" | "));
 });
 
 const baseWatch = (patch = {}) => ({
@@ -174,31 +270,20 @@ test("yeni zarf tipi örnek tipiyle uyarı üretir", () => {
   assert.ok(drift, warnings.join(" | "));
   assert.ok(drift.includes("WebcastEnvelopeMessageV2"), drift);
   assert.ok(drift.includes("Örnek: WebcastEnvelopeMessageV2"), drift);
+
+  const withFields = envelopeWarnings(
+    baseWatch({
+      messageTypes: { WebcastEnvelopeMessageV2: 1 },
+      unknownSamples: {
+        WebcastEnvelopeMessageV2: { fields: ["envelopeInfo.yeniAlan", "common.method"] },
+      },
+    }),
+    { rooms: 60, seconds: 300 },
+  );
+  assert.ok(withFields.some((line) => line.includes("Örnek alanlar: envelopeInfo.yeniAlan, common.method")));
 });
 
-test("24 saat zarf tipi gelmezse örnek tiple uyarır", () => {
-  const now = Date.parse("2026-01-02T12:00:00.000Z");
-  const fresh = envelopeWarnings(baseWatch(), {
-    rooms: 60,
-    lastSeenAt: new Date(now - 23 * 3_600_000).toISOString(),
-    sampleType: "WebcastEnvelopeMessage",
-    now,
-  });
-  assert.equal(fresh.length, 0, fresh.join(" | "));
-  const stale = envelopeWarnings(baseWatch(), {
-    rooms: 60,
-    lastSeenAt: new Date(now - 25 * 3_600_000).toISOString(),
-    sampleType: "WebcastEnvelopeMessage",
-    now,
-  });
-  assert.ok(stale.some((line) => line.includes("24 saattir") && line.includes("WebcastEnvelopeMessage")), stale.join(" | "));
-  const never = envelopeWarnings(baseWatch(), {
-    rooms: 60,
-    trackingSince: new Date(now - 30 * 3_600_000).toISOString(),
-    now,
-  });
-  assert.ok(never.some((line) => line.includes("24 saattir") && line.includes("bilinmiyor")), never.join(" | "));
-});
+
 
 test("kısa bağlantı süresi pencereyi aşmadan sınırlanır", () => {
   const now = 1_000_000;
@@ -306,6 +391,112 @@ test("ilk oda verisinden zarf çıkan oda sayılır", async () => {
   });
   assert.equal(watch.roomInfoEnvelopeRooms, 1);
   assert.equal(watch.envelopes.length, 1);
+});
+
+test("oda geçmişi bağlantı ve zarf sayaçlarını biriktirir", async () => {
+  const info = message();
+  info.envelopeInfo.roomId = "730000000000001001";
+  class FakeConnection {
+    constructor() {
+      this.roomInfo = info;
+    }
+    on() {}
+    async connect() {
+      return { isConnected: true };
+    }
+    async disconnect() {}
+  }
+  const watch = await watchEnvelopes({
+    rooms: [{ roomId: "730000000000001001", username: "canli" }],
+    seconds: 1,
+    holdSeconds: 0.01,
+    sdk: {
+      TikTokLiveConnection: FakeConnection,
+      WebcastEvent: { ENVELOPE: "envelope" },
+      ControlEvent: { DECODED_DATA: "decodedData", ERROR: "error" },
+    },
+  });
+  const history = watch.roomHistory["730000000000001001"];
+  assert.equal(history.attempts, 1);
+  assert.equal(history.connected, 1);
+  assert.equal(history.envelopes, 1);
+  assert.ok(history.lastAttemptAt);
+  assert.ok(history.lastConnectedAt);
+  assert.ok(history.lastEnvelopeAt);
+});
+
+test("bilinmeyen zarf tipinin maskeli örneği artifact için saklanır", async () => {
+  const frame = {
+    common: { method: "WebcastEnvelopeMessageV9", msgId: "gizli-mesaj" },
+    envelopeInfo: {
+      envelopeId: "gizli-zarf",
+      sendUserName: "gizli-kullanici",
+      diamondCount: 77,
+      peopleCount: 9,
+      unpackAt: now(),
+      yeniAlan: "şema-örneği",
+    },
+  };
+  class FakeConnection {
+    constructor() {
+      this.handlers = {};
+      this.roomInfo = {};
+    }
+    on(event, handler) {
+      this.handlers[event] = handler;
+    }
+    async connect() {
+      this.handlers.decodedData?.("WebcastEnvelopeMessageV9", { data: frame });
+      return { isConnected: true };
+    }
+    async disconnect() {}
+  }
+  const watch = await watchEnvelopes({
+    rooms: [{ roomId: "730000000000001003", username: "canli" }],
+    seconds: 1,
+    holdSeconds: 0.01,
+    sdk: {
+      TikTokLiveConnection: FakeConnection,
+      WebcastEvent: { ENVELOPE: "envelope" },
+      ControlEvent: { DECODED_DATA: "decodedData", ERROR: "error" },
+    },
+  });
+  const sample = watch.unknownSamples.WebcastEnvelopeMessageV9;
+  assert.ok(sample);
+  assert.ok(sample.fields.includes("envelopeInfo.yeniAlan"));
+  assert.ok(sample.fields.includes("envelopeInfo.diamondCount"));
+  const serialized = JSON.stringify(sample);
+  assert.ok(!serialized.includes("gizli-mesaj"));
+  assert.ok(!serialized.includes("gizli-zarf"));
+  assert.ok(!serialized.includes("gizli-kullanici"));
+  assert.equal(watch.messageTypes.WebcastEnvelopeMessageV9, 1);
+});
+
+test("429 alan odanın geçmişi güvenilirlik için işaretlenir", async () => {
+  class FakeConnection {
+    constructor() {}
+    on() {}
+    async connect() {
+      throw new Error("429 Too Many Requests");
+    }
+    async disconnect() {}
+  }
+  const watch = await watchEnvelopes({
+    rooms: [{ roomId: "730000000000001002", username: "kota" }],
+    seconds: 1,
+    apiKey: "test-key",
+    sdk: {
+      TikTokLiveConnection: FakeConnection,
+      WebcastEvent: { ENVELOPE: "envelope" },
+      ControlEvent: { DECODED_DATA: "decodedData", ERROR: "error" },
+    },
+  });
+  const history = watch.roomHistory["730000000000001002"];
+  assert.equal(history.attempts, 1);
+  assert.equal(history.connected, 0);
+  assert.equal(history.failed, 1);
+  assert.equal(history.rateLimitHits, 1);
+  assert.ok(history.lastRateLimitedAt);
 });
 
 test("koin çantası işaretlenir, fan kulübü çantası reddedilir", () => {

@@ -47,6 +47,58 @@ function maskValue(value, key) {
   return value;
 }
 
+/**
+ * Maskeli yükün alan yollarını (değerleri değil) çıkarır. Şema sürüklenmesi
+ * raporunda hangi alanların geldiğini göstermek için kullanılır.
+ */
+export function envelopeFieldPaths(payload, { limit = 80 } = {}) {
+  const fields = [];
+  const seen = new Set();
+  const walk = (value, prefix) => {
+    if (fields.length >= limit) return;
+    if (Array.isArray(value)) {
+      if (!value.length) {
+        if (prefix && !seen.has(`${prefix}[]`)) {
+          seen.add(`${prefix}[]`);
+          fields.push(`${prefix}[]`);
+        }
+        return;
+      }
+      walk(value[0], `${prefix}[]`);
+      return;
+    }
+    if (isObject(value)) {
+      for (const [key, child] of Object.entries(value)) {
+        const path = prefix ? `${prefix}.${key}` : key;
+        walk(child, path);
+        if (fields.length >= limit) return;
+      }
+      return;
+    }
+    if (prefix && !seen.has(prefix)) {
+      seen.add(prefix);
+      fields.push(prefix);
+    }
+  };
+  walk(isObject(payload) ? payload : {}, "");
+  return fields;
+}
+
+/**
+ * Bilinmeyen bir zarf tipinin artifact'a konacak maskeli örneği. Ham kare
+ * olduğu gibi değil, `maskEnvelopePayload` ile aynı maskeleme kurallarından
+ * geçmiş hâliyle saklanır; yalnızca alan adları rapora eklenir.
+ */
+export function unknownEnvelopeSample(raw, { method = "WebcastEnvelopeMessage", capturedAt = new Date(), event = "decodedData" } = {}) {
+  const fixture = maskEnvelopePayload(raw, { method, capturedAt, event });
+  return {
+    type: method,
+    capturedAt: fixture.source.capturedAt,
+    fields: envelopeFieldPaths(fixture.payload),
+    sample: fixture.payload,
+  };
+}
+
 function maskObject(value) {
   const out = {};
   for (const [key, child] of Object.entries(value)) {

@@ -69,7 +69,7 @@ export function sameSet(left, right) {
 }
 
 /**
- * Yayınlanacak zarf şeması imzası. Şema sürüklenmesi ve 24 saat sessizlik
+ * Yayınlanacak zarf şeması imzası. Şema sürüklenmesi ve tip başına sessizlik
  * uyarıları yalnızca `warnings`/`health` alanlarında görünür; oda ve sandık
  * kümeleri değişmese de panel bu raporu almalı. Kota sayaçları gibi her turda
  * değişen satırlar imzaya girmez, yoksa yayın kapısı her koşuda açılırdı.
@@ -79,7 +79,12 @@ export function warningSignature(snapshot) {
   const health = obj(data.health);
   const schemaWarnings = list(data.warnings)
     .map((line) => str(line))
-    .filter((line) => line.startsWith("Zarf şeması sürüklenmesi:") || line.startsWith("24 saattir "));
+    .filter(
+      (line) =>
+        line.startsWith("Zarf şeması sürüklenmesi:") ||
+        line.startsWith("Zarf tipi sessiz:") ||
+        line.startsWith("Zarf bildirimi "),
+    );
   const unknownTypes = list(health.unknownEnvelopeTypes).map((type) => str(type));
   return [...schemaWarnings, ...unknownTypes].join("\n");
 }

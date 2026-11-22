@@ -18,6 +18,8 @@
  * EULER_API_KEY imzalama için kullanılır, tanımlı değilse ücretsiz imzalama
  * denenir (düşük hız sınırı).
  */
+import { emptyRoomHistory } from "./room-memory.mjs";
+import { unknownEnvelopeSample } from "./envelope-capture.mjs";
 
 const clamp = (value, min, max) => {
   if (!Number.isFinite(value)) return min;
@@ -49,25 +51,135 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, m
 export const ENVELOPE_MESSAGE_TYPES = ["WebcastEnvelopeMessage", "WebcastGoodyBagMessage"];
 const ENVELOPE_TYPE_FAMILY = /envelope|goody.?bag|letter|parcel|chest/i;
 
+// Tip başına sessizlik eşiği: gözlenen görülme aralığının 3 katı, ama çok sık
+// tipte gürültüyü önlemek için en az 30 dk, çok seyrek tipte erken alarmı
+// önlemek için en fazla 24 saat. Kadans henüz yoksa 24 saatlik taban kullanılır.
+export const ENVELOPE_SILENCE_FLOOR_MS = 30 * 60_000;
+export const ENVELOPE_SILENCE_CEILING_MS = 24 * 3_600_000;
+export const ENVELOPE_SILENCE_FACTOR = 3;
+export const MAX_ENVELOPE_TYPE_ACTIVITY = 12;
+
+/** Gözlenen ortalama aralığa göre tipin sessizlik eşiğini hesaplar. */
+export function adaptiveEnvelopeSilenceMs(meanGapMs, gapCount = 0) {
+  const mean = Number(meanGapMs);
+  const count = Number(gapCount);
+  if (!Number.isFinite(mean) || mean <= 0 || !Number.isFinite(count) || count < 1) {
+    return ENVELOPE_SILENCE_CEILING_MS;
+  }
+  return Math.max(
+    ENVELOPE_SILENCE_FLOOR_MS,
+    Math.min(ENVELOPE_SILENCE_CEILING_MS, Math.round(mean * ENVELOPE_SILENCE_FACTOR)),
+  );
+}
+
+const isoTime = (value) => {
+  const parsed = Date.parse(String(value ?? ""));
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+};
+const positiveInt = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
+};
+
+/** Eski düz `health` kaydını yeni tip başına kayda taşır; veri kaybı olmaz. */
+function previousTypeActivity(previous) {
+  const rows = {};
+  for (const [rawType, raw] of Object.entries(obj(previous.envelopeTypeActivity))) {
+    const type = str(rawType, 80);
+    const row = obj(raw);
+    const lastSeenAt = isoTime(row.lastSeenAt);
+    if (!type || !lastSeenAt) continue;
+    rows[type] = {
+      lastSeenAt,
+      firstSeenAt: isoTime(row.firstSeenAt) || lastSeenAt,
+      lastCount: positiveInt(row.lastCount),
+      seenRuns: positiveInt(row.seenRuns) || 1,
+      meanGapMs: positiveInt(row.meanGapMs),
+      gapCount: positiveInt(row.gapCount),
+      silent: Boolean(row.silent),
+      silentWhileOtherFlows: Boolean(row.silentWhileOtherFlows),
+    };
+  }
+  const sampleType = str(previous.envelopeSampleType, 80);
+  const lastSeenAt = isoTime(previous.envelopeLastSeenAt);
+  if (!Object.keys(rows).length && sampleType && lastSeenAt) {
+    rows[sampleType] = {
+      lastSeenAt,
+      firstSeenAt: isoTime(previous.envelopeTrackingSince) || lastSeenAt,
+      lastCount: 0,
+      seenRuns: 1,
+      meanGapMs: 0,
+      gapCount: 0,
+      silent: false,
+      silentWhileOtherFlows: false,
+    };
+  }
+  return rows;
+}
+
 /**
- * Zarf şeması takibini yayınlar arasında taşır: bu turda tip görülmediyse son
- * görülme anı ve örnek tip önceki yayından devam eder; ilk çalıştırma sessizlik
- * tabanını (`trackingSince`) kurar. Geçersiz eski değerler yok sayılır.
+ * Zarf şeması takibini yayınlar arasında taşır. Her zarf tipi için ayrı son
+ * görülme anı ve gözlenen görülme aralığı tutulur; sessizlik eşiği bu kadansa
+ * göre hesaplanır. Bir tip susarken başka bir zarf tipi akıyorsa bu ayrıca
+ * işaretlenir. Geçersiz eski değerler yok sayılır.
  */
 export function envelopeSchemaState(messageTypes, previous = {}, now = Date.now()) {
   const drift = envelopeTypeDrift(messageTypes);
   const prev = obj(previous);
-  const iso = (value) => {
-    const parsed = Date.parse(String(value ?? ""));
-    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-  };
   const at = new Date(now).toISOString();
+  const activity = previousTypeActivity(prev);
+  const counts = obj(messageTypes);
+
+  for (const type of drift.types) {
+    const before = activity[type];
+    const previousSeen = before ? Date.parse(before.lastSeenAt) : NaN;
+    const gap = Number.isFinite(previousSeen) && now > previousSeen ? now - previousSeen : 0;
+    const gapCount = gap > 0 ? (before?.gapCount ?? 0) + 1 : before?.gapCount ?? 0;
+    const meanGapMs =
+      gap > 0
+        ? Math.round(((before?.meanGapMs ?? 0) * (before?.gapCount ?? 0) + gap) / gapCount)
+        : before?.meanGapMs ?? 0;
+    activity[type] = {
+      lastSeenAt: at,
+      firstSeenAt: before?.firstSeenAt || at,
+      lastCount: positiveInt(counts[type]),
+      seenRuns: (before?.seenRuns ?? 0) + 1,
+      meanGapMs,
+      gapCount,
+      silent: false,
+      silentWhileOtherFlows: false,
+    };
+  }
+
+  const flowingTypes = drift.types;
+  const rows = Object.entries(activity)
+    .map(([type, row]) => {
+      const thresholdMs = adaptiveEnvelopeSilenceMs(row.meanGapMs, row.gapCount);
+      const lastSeenMs = Date.parse(row.lastSeenAt);
+      const silent = Number.isFinite(lastSeenMs) && now - lastSeenMs >= thresholdMs;
+      return {
+        type,
+        ...row,
+        thresholdMs,
+        silent,
+        silentWhileOtherFlows: silent && flowingTypes.some((flowing) => flowing !== type),
+      };
+    })
+    .sort((left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt) || left.type.localeCompare(right.type))
+    .slice(0, MAX_ENVELOPE_TYPE_ACTIVITY);
+
+  const typeActivity = Object.fromEntries(rows.map((row) => [row.type, row]));
+  const latest = rows.reduce((max, row) => Math.max(max, Date.parse(row.lastSeenAt) || 0), 0);
   return {
     ...drift,
     at,
-    trackingSince: iso(prev.envelopeTrackingSince) || at,
-    lastSeenAt: drift.types.length ? at : iso(prev.envelopeLastSeenAt),
+    trackingSince: isoTime(prev.envelopeTrackingSince) || at,
+    lastSeenAt: latest ? new Date(latest).toISOString() : null,
     sampleType: drift.sampleType ?? (str(prev.envelopeSampleType, 80) || null),
+    typeActivity,
+    flowingTypes,
+    silentTypes: rows.filter((row) => row.silent).map((row) => row.type),
+    silentWhileOtherFlows: rows.filter((row) => row.silentWhileOtherFlows).map((row) => row.type),
   };
 }
 
@@ -244,11 +356,13 @@ export function envelopeWarnings(
     enabled = true,
     seconds = 0,
     apiKey = false,
-    // Son zarf tipinin görüldüğü an ve o anki örnek tip; 24 saat sessizlik
-    // kontrolü bu kayda dayanır (yayınlar arasında `health` alanında taşınır).
+    // Tip başına son görülme/kadans kaydı; yayınlar arasında `health` alanında taşınır.
+    // `lastSeenAt`/`trackingSince` yalnızca hiç tip kaydı yoksa bootstrap için kullanılır.
     lastSeenAt = null,
     trackingSince = null,
     sampleType = null,
+    typeActivity = null,
+    flowingTypes = null,
     now = Date.now(),
   } = {},
 ) {
@@ -293,22 +407,61 @@ export function envelopeWarnings(
       .slice(0, 3)
       .map((row) => row.type)
       .join(", ");
+    const sample = obj(obj(watch.unknownSamples)[drift.unknown[0].type]);
+    const fields = list(sample.fields).filter((field) => typeof field === "string").slice(0, 6);
     warnings.push(
       `Zarf şeması sürüklenmesi: bilinmeyen zarf/çanta mesaj tipi ${detail}. ` +
-        `Örnek: ${drift.unknown[0].type}. Dönüştürücü bu tipi tanımıyor; ` +
-        "ad değiştiyse scripts/envelope-watch.mjs içindeki ENVELOPE_MESSAGE_TYPES listesine ekleyin.",
+        `Örnek: ${drift.unknown[0].type}.` +
+        (fields.length ? ` Örnek alanlar: ${fields.join(", ")}.` : "") +
+        " Dönüştürücü bu tipi tanımıyor; ad değiştiyse scripts/envelope-watch.mjs içindeki ENVELOPE_MESSAGE_TYPES listesine ekleyin.",
     );
   }
 
-  // 24 saat sessizlik: dinleme çalışsa bile zarf tipi hiç gelmiyorsa tip adı
-  // değişmiş olabilir. İlk çalıştırmada taban `trackingSince` ile kurulur.
-  const silenceFrom = lastSeenAt || trackingSince;
-  const silenceMs = Date.parse(String(silenceFrom ?? ""));
-  if (Number.isFinite(silenceMs) && now - silenceMs >= 24 * 3_600_000) {
+  // Tip başına sessizlik: eşik gözlenen kadansa göre hesaplanır (ortalama
+  // aralığın 3 katı, 30 dk–24 saat arası). Bir tip susarken başka bir zarf tipi
+  // akıyorsa bu ayrıca işaretlenir; yalnızca 24 saatlik tek eşik kullanılmaz.
+  const activity = obj(typeActivity);
+  const currentFlowing = list(flowingTypes).length ? list(flowingTypes) : drift.types;
+  const silentRows = Object.entries(activity)
+    .map(([type, raw]) => {
+      const row = obj(raw);
+      const lastSeenMs = Date.parse(String(row.lastSeenAt ?? ""));
+      const thresholdMs =
+        positiveInt(row.thresholdMs) || adaptiveEnvelopeSilenceMs(row.meanGapMs, row.gapCount);
+      const silent = Number.isFinite(lastSeenMs) && now - lastSeenMs >= thresholdMs;
+      return { type, row, lastSeenMs, thresholdMs, silent };
+    })
+    .filter((entry) => entry.silent)
+    .sort((left, right) => left.lastSeenMs - right.lastSeenMs)
+    .slice(0, 3);
+
+  for (const { type, row, lastSeenMs, thresholdMs } of silentRows) {
+    const meanMinutes = Math.max(1, Math.round((positiveInt(row.meanGapMs) || thresholdMs / ENVELOPE_SILENCE_FACTOR) / 60_000));
+    const thresholdMinutes = Math.max(1, Math.round(thresholdMs / 60_000));
+    // Yaş yerine sabit son görülme anı: uyarı metni her taramada büyümesin,
+    // yoksa yayın kapısı sessizlik sürdükçe gereksiz açılır.
+    const lastSeenLabel = new Date(lastSeenMs).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+    const otherFlowing = currentFlowing.filter((flowing) => flowing !== type);
+    const marker = otherFlowing.length
+      ? ` Başka zarf tipi akıyor: ${otherFlowing.slice(0, 2).join(", ")}.`
+      : "";
     warnings.push(
-      `24 saattir hiç zarf/çanta mesaj tipi görülmedi (son örnek: ${sampleType || "bilinmiyor"}). ` +
-        "TikTok tip adını değiştirmiş olabilir; ham WebSocket mesaj tiplerini kontrol edin.",
+      `Zarf tipi sessiz: ${type} (son görülme ${lastSeenLabel}, gözlenen aralık ~${meanMinutes} dk, ` +
+        `eşik ${thresholdMinutes} dk).${marker} TikTok tip adını değiştirmiş veya olay akışı durmuş olabilir.`,
     );
+  }
+
+  // Hiç tip kaydı yoksa (ilk kurulum) kadans hesaplanamaz; taban çizgisiyle
+  // sessizliği yine de görünür kıl. Bu, tip başına eşiğin yerine geçmez.
+  if (!Object.keys(activity).length) {
+    const silenceFrom = lastSeenAt || trackingSince;
+    const silenceMs = Date.parse(String(silenceFrom ?? ""));
+    if (Number.isFinite(silenceMs) && now - silenceMs >= ENVELOPE_SILENCE_CEILING_MS) {
+      warnings.push(
+        `Zarf tipi sessiz: hiç zarf/çanta mesaj tipi görülmedi (son örnek: ${sampleType || "bilinmiyor"}; ` +
+          "henüz kadans gözlenmedi, taban 24 saat). TikTok tip adını değiştirmiş olabilir.",
+      );
+    }
   }
   return warnings;
 }
@@ -357,6 +510,10 @@ export async function watchEnvelopes({
     cooldownSeconds: 0,
     cooldownWaits: 0,
     envelopes: [],
+    // Bilinmeyen zarf tiplerinin maskeli ham örnekleri; shard artifact'ına gider.
+    unknownSamples: {},
+    // Oda bazında kalıcı geçmişe aktarılacak deneme/bağlantı/429/zarf kaydı.
+    roomHistory: {},
     messageTypes: {},
     errors: [],
     startedAt: new Date().toISOString(),
@@ -412,6 +569,16 @@ export async function watchEnvelopes({
   const startedAt = Date.now();
   // Ham kareyi yakalama adımına verir; dinlemeyi hiçbir zaman durdurmaz.
   const captureRaw = (raw, room, method) => {
+    const type = String(method || "").trim();
+    const known = ENVELOPE_MESSAGE_TYPES.some((name) => name.toLowerCase() === type.toLowerCase());
+    if (type && !known && !result.unknownSamples[type] && Object.keys(result.unknownSamples).length < 10) {
+      try {
+        result.unknownSamples[type] = unknownEnvelopeSample(raw, { method: type });
+        log(`bilinmeyen zarf örneği artifact'a eklendi: ${type}`);
+      } catch (error) {
+        log(`bilinmeyen zarf örneği hazırlanamadı: ${error instanceof Error ? error.message : "hata"}`);
+      }
+    }
     if (!raw || typeof onRawEnvelope !== "function") return;
     try {
       const pending = onRawEnvelope(raw, room, method);
@@ -425,10 +592,21 @@ export async function watchEnvelopes({
       log(`zarf yakalama hatası: ${error instanceof Error ? error.message : "hata"}`);
     }
   };
+  const roomState = (roomId) => {
+    const key = String(roomId ?? "").trim();
+    if (!key) return null;
+    if (!result.roomHistory[key]) result.roomHistory[key] = emptyRoomHistory();
+    return result.roomHistory[key];
+  };
   const collect = (reward, room = null) => {
     if (!reward || seen.size === 0) return;
     if (result.envelopes.some((row) => row.envelopeId === reward.envelopeId)) return;
     result.envelopes.push(reward);
+    const history = roomState(reward.roomId || room?.roomId);
+    if (history) {
+      history.envelopes += 1;
+      history.lastEnvelopeAt = new Date().toISOString();
+    }
     log(`zarf yakalandı: ${reward.envelopeId} · ${reward.coins} koin · ${reward.slots} kişi · oda ${reward.roomId}`);
     // Bildirim hatası dinlemeyi durdurmaz; sadece nedeni log'a yazılır.
     if (typeof onEnvelope === "function") {
@@ -489,6 +667,8 @@ export async function watchEnvelopes({
         });
       } catch (error) {
         result.failed += 1;
+        const history = roomState(room.roomId);
+        if (history) history.failed += 1;
         if (result.errors.length < 20) result.errors.push(`bağlantı kurulamadı (${room.roomId}): ${error instanceof Error ? error.message : "hata"}`);
         continue;
       }
@@ -504,15 +684,30 @@ export async function watchEnvelopes({
         if (/Envelope/i.test(name)) {
           captureRaw(payload, room, name);
           collect(envelopeReward(payload, room.roomId), room);
-        } else if (/GoodyBag/i.test(name)) collect(bagReward(payload, room.roomId), room);
+        } else if (/GoodyBag/i.test(name)) {
+          captureRaw(payload, room, name);
+          collect(bagReward(payload, room.roomId), room);
+        } else if (ENVELOPE_TYPE_FAMILY.test(name)) {
+          // Mektup/parsel vb. tanınmayan bir aile üyesi de örnek olarak saklanır.
+          captureRaw(payload, room, name);
+        }
       });
       conn.on(ControlEvent?.ERROR ?? "error", () => null);
 
       try {
         result.attempted += 1;
+        const history = roomState(room.roomId);
+        if (history) {
+          history.attempts += 1;
+          history.lastAttemptAt = new Date().toISOString();
+        }
         const connected = await conn.connect(room.roomId);
         if (!connected?.isConnected) throw new Error("bağlantı doğrulanamadı");
         result.connected += 1;
+        if (history) {
+          history.connected += 1;
+          history.lastConnectedAt = new Date().toISOString();
+        }
         connectedRoomIds.add(room.roomId);
         result.connectedRooms = connectedRoomIds.size;
         // Odaya girer girmez ilk oda verisindeki zarfları oku: sandık biz
@@ -533,9 +728,15 @@ export async function watchEnvelopes({
         while (Date.now() < holdUntil) await sleep(Math.min(2_000, Math.max(0, holdUntil - Date.now())));
       } catch (error) {
         result.failed += 1;
+        const history = roomState(room.roomId);
+        if (history) history.failed += 1;
         const message = error instanceof Error ? error.message : String(obj(error).message ?? "hata");
         if (/rate.?limit|too many connections|\b429\b/i.test(message)) {
           result.rateLimitHits += 1;
+          if (history) {
+            history.rateLimitHits += 1;
+            history.lastRateLimitedAt = new Date().toISOString();
+          }
           if (apiKey) result.rateLimited = true;
           else {
             retry(room);

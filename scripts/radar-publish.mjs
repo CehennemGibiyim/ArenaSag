@@ -54,8 +54,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateRoster, validateSnapshot } from "./radar-contract.mjs";
 import { envelopeSchemaState, envelopeWarnings, watchEnvelopes } from "./envelope-watch.mjs";
-import { createEnvelopeNotifier } from "./radar-notify.mjs";
-import { mergeShardWatches, readShardResults, shardCoverage } from "./envelope-shards.mjs";
+import { createEnvelopeNotifier, mergeNotificationStats, notificationWarnings } from "./radar-notify.mjs";
+import { mergeShardWatches, readShardResults, shardCoverage, shardRooms } from "./envelope-shards.mjs";
+import { mergeRoomMemory } from "./room-memory.mjs";
 import { applyChestReward } from "./chest-record.mjs";
 import { mirrorToSupabase } from "./supabase-mirror.mjs";
 
@@ -199,10 +200,10 @@ async function mapLimit(items, limit, fn) {
 async function readPrevious() {
   try {
     const raw = JSON.parse(await readFile(OUT_FILE, "utf8"));
-    if (obj(raw).schema !== 1) return { streams: [], chests: [] };
-    return { streams: list(raw.streams), chests: list(raw.chests) };
+    if (obj(raw).schema !== 1) return { streams: [], chests: [], roomMemory: {} };
+    return { streams: list(raw.streams), chests: list(raw.chests), roomMemory: obj(raw.roomMemory) };
   } catch {
-    return { streams: [], chests: [] };
+    return { streams: [], chests: [], roomMemory: {} };
   }
 }
 
@@ -651,7 +652,10 @@ const order = [...aliveIds]
 // WebSocket zarf dinleyicisi oda nöbetiyle PARALEL çalışır: dinleme sürerken
 // `room/info` turları da ilerler. Zarf yalnızca canlı akışta göründüğü için
 // asıl yakalama yolu budur.
-const watchRooms = order.slice(0, ENVELOPE_ROOMS).map(([roomId, meta]) => ({ ...meta, roomId }));
+const watchRooms = shardRooms(
+  order.map(([roomId, meta]) => ({ ...meta, roomId })),
+  { shard: 0, shards: 1, rooms: ENVELOPE_ROOMS, memory: previous.roomMemory },
+);
 const watchSeconds = Math.min(ENVELOPE_SECONDS, Math.max(0, Math.round((DEADLINE - Date.now()) / 1000)));
 // Zarf yakalandığı anda haber verilir: panel senkronu ve Pages yayını beklenmez.
 // Adres yalnızca secret'tan gelir; aynı zarf bir kez, koşu başına en fazla dört
@@ -774,6 +778,11 @@ for (let round = 0; round < CHEST_ROUNDS && order.length; round += 1) {
 const localWatch = await watchPromise;
 // Matris sonucu varsa esas kaynak odur; yoksa yerel dinleyici (matris dışı) kullanılır.
 const watch = shardWatch ?? localWatch;
+// Oda hafızası önceki yayından devam eder; matris sonucu varsa bu turun
+// oda sayaçları eklenir, yoksa yerel dinleyicinin kayıtları kullanılır.
+const roomMemory = mergeRoomMemory(previous.roomMemory, shardWatch ? shardWatch.roomHistory : localWatch?.roomHistory, {
+  now: NOW,
+});
 const wsEnvelopes = [];
 for (const reward of watch?.envelopes ?? []) {
   let meta = universe.get(reward.roomId);
@@ -802,12 +811,17 @@ for (const reward of watch?.envelopes ?? []) {
 }
 for (const error of (watch?.errors ?? []).slice(0, 3)) errors.push(error);
 
-// Bekleyen bildirimler yayın yazılmadan önce bitirilir; sonuç tek satırda raporlanır.
+// Bekleyen bildirimler yayın yazılmadan önce bitirilir; shard'ların anlık
+// bildirim sayaçlarıyla birleştirilir. Hata sessizce kaybolmaz.
 const notified = await notifier.settle();
-if (notified.sent || notified.failed || notified.skipped) {
+const notifications = mergeNotificationStats([
+  ...shardResults.map((row) => row.notifications),
+  notified,
+]);
+if (notifications.sent || notifications.failed || notifications.skipped || notifications.disabled) {
   console.log(
-    `[arena-radar] zarf bildirimi: ${notified.sent} gönderildi · ${notified.failed} başarısız · ` +
-      `${notified.skipped} atlandı (tekrar/sınır/açılışı geçmiş)`,
+    `[arena-radar] zarf bildirimi: ${notifications.sent} gönderildi · ${notifications.failed} başarısız · ` +
+      `${notifications.skipped} atlandı · ${notifications.retries} tekrar · ${notifications.fallbackSent} yedek`,
   );
 }
 
@@ -869,12 +883,23 @@ const newestVerified = streamList.reduce((latest, row) => {
 const dataAgeMinutes = newestVerified ? Math.max(0, Math.round((NOW - newestVerified) / 60_000)) : null;
 // Dinleme durumu ve imzalama kotası panelde görünür olmalı; uyarılar sessizce
 // yutulmaz, `warnings` alanıyla yayınlanır.
-// Zarf şeması takibi: bilinmeyen tip ve 24 saat sessizlik, önceki yayının
-// `health` kaydıyla karşılaştırılarak raporlanır; ilk çalıştırma tabanı kurar.
+// Zarf şeması takibi: bilinmeyen tip ve tip başına uyarlanabilir sessizlik,
+// önceki yayının `health` kaydıyla karşılaştırılarak raporlanır; ilk çalıştırma tabanı kurar.
 const envelopeTypes = envelopeSchemaState(watch?.messageTypes ?? {}, previous.health);
+// Bilinmeyen tiplerin maskeli artifact örneği watch içinde; yayın/issue için
+// yalnızca tip ve alan listesini sağlık özetine taşırız (ham örnek artifact'ta kalır).
+const unknownEnvelopeSamples = Object.entries(obj(watch?.unknownSamples))
+  .slice(0, 5)
+  .map(([type, sample]) => ({
+    type,
+    fields: list(obj(sample).fields).slice(0, 20),
+    capturedAt: str(obj(sample).capturedAt, 40) || null,
+  }));
 const runAt = envelopeTypes.at;
-const wsWarnings =
-  shardDir && !shardResults.length
+const wsWarnings = [
+  // Bildirim teslimatı en görünür uyarı olsun; panel ilk satırları gösteriyor.
+  ...notificationWarnings(notifications),
+  ...(shardDir && !shardResults.length
     ? [
         "Matris dinleme artifact'ı bulunamadı: bu turda hiçbir oda WebSocket'ten dinlenmedi. " +
           "Shard işinin loguna bakın.",
@@ -887,7 +912,10 @@ const wsWarnings =
         lastSeenAt: envelopeTypes.lastSeenAt,
         trackingSince: envelopeTypes.trackingSince,
         sampleType: envelopeTypes.sampleType,
-      });
+        typeActivity: envelopeTypes.typeActivity,
+        flowingTypes: envelopeTypes.flowingTypes,
+      })),
+];
 const wsRateLimited = Boolean(watch?.rateLimited) || (watch?.rateLimitHits ?? 0) > 0;
 const health = {
   ok: !stale,
@@ -911,6 +939,8 @@ const health = {
   wsRequested: watch?.requested ?? watchRooms.length,
   wsShards: shardResults.length,
   wsShardCoverage: shardStats,
+  wsRoomMemory: Object.keys(roomMemory).length,
+  notifications,
   wsSignedWithKey: Boolean(watch?.signedWithKey),
   wsRateLimited,
   wsRateLimitHits: watch?.rateLimitHits ?? 0,
@@ -919,11 +949,16 @@ const health = {
   wsCooldownSeconds: watch?.cooldownSeconds ?? 0,
   wsCooldownWaits: watch?.cooldownWaits ?? 0,
   wsWarnings: wsWarnings.length,
-  // Zarf şeması raporu: bilinmeyen tipler ve sessizlik takibi yayınlar arasında taşınır.
+  // Zarf şeması raporu: bilinmeyen tipler ve tip başına sessizlik/kadans yayınlar arasında taşınır.
   envelopeLastSeenAt: envelopeTypes.lastSeenAt,
   envelopeTrackingSince: envelopeTypes.trackingSince,
   envelopeSampleType: envelopeTypes.sampleType,
+  envelopeTypeActivity: envelopeTypes.typeActivity,
+  envelopeFlowingTypes: envelopeTypes.flowingTypes,
+  envelopeSilentTypes: envelopeTypes.silentTypes,
+  envelopeSilentWhileOtherFlows: envelopeTypes.silentWhileOtherFlows,
   unknownEnvelopeTypes: envelopeTypes.unknown.map((row) => row.type).slice(0, 5),
+  unknownEnvelopeSamples,
   errors: errors.length,
   roster: roster.streamers.length,
 };
@@ -958,6 +993,8 @@ const snapshot = {
   },
   regions: regionsPicked.map((code) => ({ code, supported: regionCodes.includes(code) })),
   rounds,
+  // Kalıcı oda geçmişi: sonraki shard turu seçimi bunu okur.
+  ...(Object.keys(roomMemory).length ? { roomMemory } : {}),
   watch: watch
     ? {
         requested: watch.requested ?? watchRooms.length,
