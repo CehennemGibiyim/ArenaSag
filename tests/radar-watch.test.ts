@@ -1,7 +1,7 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { readGeneratedAt, readWarnings, readWatch } from "../src/lib/radar-watch";
-import { readRadarWatch } from "../src/server/radar-sync";
+import { readRadarWatch, syncRadar } from "../src/server/radar-sync";
 
 const SNAPSHOT_URL = "https://example.test/web/data/arena-live.json";
 
@@ -195,6 +195,61 @@ test("hata önbelleğe alınmaz, sonraki istek yeniden dener", async () => {
       const second = await readRadarWatch(url);
       assert.equal(second.watch?.connected, 3);
       assert.equal(calls, 2);
+    },
+  );
+});
+
+test("syncRadar paylaşılan fetchRadarPayload yolunu kullanır", async () => {
+  const url = `${SNAPSHOT_URL}?sync=ok`;
+  let calls = 0;
+  let request: RequestInit | undefined;
+  await withFetch(
+    async (_input, init) => {
+      calls += 1;
+      request = init;
+      return jsonResponse({
+        schema: 1,
+        generatedAt: "2026-01-01T12:00:00.000Z",
+        streams: [],
+        chests: [],
+      });
+    },
+    async () => {
+      const result = await syncRadar(url);
+      assert.equal(calls, 1);
+      assert.equal(result.ok, true);
+      assert.equal(result.fetched, 0);
+      assert.equal(result.rooms, 0);
+      assert.equal(result.live, 0);
+      assert.equal(result.chests, 0);
+      assert.equal(result.stale, false);
+      assert.match(result.syncedAt, /^\d{4}-\d{2}-\d{2}T/);
+      assert.equal(new Headers(request?.headers).get("user-agent"), "ArenaPanel/radar-sync");
+      assert.equal(request?.cache, "no-store");
+      assert.ok(request?.signal, "zaman aşımı sinyali gönderilmeli");
+    },
+  );
+});
+
+test("syncRadar hata sonucu döner ve hatalı biçimi kabul etmez", async () => {
+  await withFetch(
+    async () => jsonResponse({ error: "yok" }, 503),
+    async () => {
+      const result = await syncRadar(`${SNAPSHOT_URL}?sync=503`);
+      assert.equal(result.ok, false);
+      assert.equal(result.error, "HTTP 503");
+      assert.equal(result.fetched, 0);
+      assert.equal(result.rooms, 0);
+      assert.equal(result.chests, 0);
+    },
+  );
+  await withFetch(
+    async () => jsonResponse({ schema: 1, chests: [] }),
+    async () => {
+      const result = await syncRadar(`${SNAPSHOT_URL}?sync=no-streams`);
+      assert.equal(result.ok, false);
+      assert.equal(result.fetched, 0);
+      assert.ok(result.error?.includes("biçimi"), result.error);
     },
   );
 });
