@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "dataVersion": "2026-11-25T01:48:42.606Z",
-  "generatedAt": "2026-11-25T01:48:42.606Z",
+  "dataVersion": "2026-11-25T10:36:30.941Z",
+  "generatedAt": "2026-11-25T10:36:30.941Z",
   "commit": "f97f15dd560a245e54754dbedc82d97124f6f80d",
   "stale": false,
   "dataAgeMinutes": 0,
@@ -10,48 +10,48 @@
     "stale": false,
     "degraded": false,
     "dataAgeMinutes": 0,
-    "live": 71,
+    "live": 41,
     "chests": 0,
     "chestsWaiting": 0,
     "chestsOpen": 0,
     "letters": 0,
-    "roomsAlive": 71,
-    "roomsScanned": 426,
+    "roomsAlive": 41,
+    "roomsScanned": 246,
     "rounds": 6,
-    "wsRooms": 8,
-    "wsConnectedRooms": 8,
-    "wsAttempted": 47,
+    "wsRooms": 1,
+    "wsConnectedRooms": 1,
+    "wsAttempted": 60,
     "wsEnvelopes": 0,
-    "wsMessages": 225,
-    "wsRequested": 47,
+    "wsMessages": 10,
+    "wsRequested": 60,
     "wsShards": 4,
     "wsShardCoverage": [
       {
         "shard": 0,
-        "attempted": 12,
-        "connectedRooms": 3,
+        "attempted": 15,
+        "connectedRooms": 0,
         "roomInfoEnvelopeRooms": 0
       },
       {
         "shard": 1,
-        "attempted": 12,
-        "connectedRooms": 2,
+        "attempted": 15,
+        "connectedRooms": 0,
         "roomInfoEnvelopeRooms": 0
       },
       {
         "shard": 2,
-        "attempted": 12,
-        "connectedRooms": 2,
+        "attempted": 15,
+        "connectedRooms": 1,
         "roomInfoEnvelopeRooms": 0
       },
       {
         "shard": 3,
-        "attempted": 11,
-        "connectedRooms": 1,
+        "attempted": 15,
+        "connectedRooms": 0,
         "roomInfoEnvelopeRooms": 0
       }
     ],
-    "wsRoomMemory": 514,
+    "wsRoomMemory": 573,
     "notifications": {
       "sent": 0,
       "failed": 0,
@@ -73,7 +73,7 @@
     "wsCooldownWaits": 0,
     "wsWarnings": 2,
     "envelopeLastSeenAt": null,
-    "envelopeTrackingSince": "2026-11-25T01:48:42.606Z",
+    "envelopeTrackingSince": "2026-11-25T10:36:30.941Z",
     "envelopeSampleType": null,
     "envelopeTypeActivity": {},
     "envelopeFlowingTypes": [],
@@ -82,27 +82,27 @@
     "unknownEnvelopeTypes": [],
     "unknownEnvelopeSamples": [],
     "errors": 7,
-    "roster": 606
+    "roster": 627
   },
   "stats": {
-    "candidates": 373,
-    "checked": 359,
-    "live": 71,
+    "candidates": 377,
+    "checked": 369,
+    "live": 41,
     "chests": 0,
     "letters": 0,
     "chestRounds": 6,
-    "roomsAlive": 71,
-    "roomsScanned": 426,
-    "wsRooms": 8,
+    "roomsAlive": 41,
+    "roomsScanned": 246,
+    "wsRooms": 1,
     "wsEnvelopes": 0,
-    "wsMessages": 225,
-    "newMembers": 41,
-    "roster": 606,
+    "wsMessages": 10,
+    "newMembers": 21,
+    "roster": 627,
     "errors": 7,
     "degraded": false
   },
   "roster": {
-    "total": 606,
-    "today": 41
+    "total": 627,
+    "today": 21
   }
 }
