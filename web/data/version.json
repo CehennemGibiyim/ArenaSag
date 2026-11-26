@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "dataVersion": "2026-11-25T20:17:21.126Z",
-  "generatedAt": "2026-11-25T20:17:21.126Z",
+  "dataVersion": "2026-11-26T02:59:55.206Z",
+  "generatedAt": "2026-11-26T02:59:55.206Z",
   "commit": "f97f15dd560a245e54754dbedc82d97124f6f80d",
   "stale": false,
   "dataAgeMinutes": 0,
@@ -10,44 +10,44 @@
     "stale": false,
     "degraded": false,
     "dataAgeMinutes": 0,
-    "live": 72,
+    "live": 105,
     "chests": 0,
     "chestsWaiting": 0,
     "chestsOpen": 0,
     "letters": 0,
-    "roomsAlive": 72,
-    "roomsScanned": 432,
+    "roomsAlive": 105,
+    "roomsScanned": 630,
     "rounds": 6,
-    "wsRooms": 10,
-    "wsConnectedRooms": 10,
-    "wsAttempted": 41,
+    "wsRooms": 6,
+    "wsConnectedRooms": 6,
+    "wsAttempted": 60,
     "wsEnvelopes": 0,
-    "wsMessages": 152,
-    "wsRequested": 41,
+    "wsMessages": 87,
+    "wsRequested": 60,
     "wsShards": 4,
     "wsShardCoverage": [
       {
         "shard": 0,
-        "attempted": 11,
-        "connectedRooms": 3,
-        "roomInfoEnvelopeRooms": 0
-      },
-      {
-        "shard": 1,
-        "attempted": 10,
+        "attempted": 15,
         "connectedRooms": 1,
         "roomInfoEnvelopeRooms": 0
       },
       {
+        "shard": 1,
+        "attempted": 15,
+        "connectedRooms": 0,
+        "roomInfoEnvelopeRooms": 0
+      },
+      {
         "shard": 2,
-        "attempted": 10,
+        "attempted": 15,
         "connectedRooms": 2,
         "roomInfoEnvelopeRooms": 0
       },
       {
         "shard": 3,
-        "attempted": 10,
-        "connectedRooms": 4,
+        "attempted": 15,
+        "connectedRooms": 3,
         "roomInfoEnvelopeRooms": 0
       }
     ],
@@ -73,7 +73,7 @@
     "wsCooldownWaits": 0,
     "wsWarnings": 2,
     "envelopeLastSeenAt": null,
-    "envelopeTrackingSince": "2026-11-25T20:17:21.126Z",
+    "envelopeTrackingSince": "2026-11-26T02:59:55.206Z",
     "envelopeSampleType": null,
     "envelopeTypeActivity": {},
     "envelopeFlowingTypes": [],
@@ -81,28 +81,28 @@
     "envelopeSilentWhileOtherFlows": [],
     "unknownEnvelopeTypes": [],
     "unknownEnvelopeSamples": [],
-    "errors": 6,
-    "roster": 665
+    "errors": 43,
+    "roster": 719
   },
   "stats": {
-    "candidates": 375,
-    "checked": 364,
-    "live": 72,
+    "candidates": 371,
+    "checked": 361,
+    "live": 105,
     "chests": 0,
     "letters": 0,
     "chestRounds": 6,
-    "roomsAlive": 72,
-    "roomsScanned": 432,
-    "wsRooms": 10,
+    "roomsAlive": 105,
+    "roomsScanned": 630,
+    "wsRooms": 6,
     "wsEnvelopes": 0,
-    "wsMessages": 152,
-    "newMembers": 38,
-    "roster": 665,
-    "errors": 6,
+    "wsMessages": 87,
+    "newMembers": 54,
+    "roster": 719,
+    "errors": 43,
     "degraded": false
   },
   "roster": {
-    "total": 665,
-    "today": 38
+    "total": 719,
+    "today": 54
   }
 }
